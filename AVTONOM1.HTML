@@ -1,0 +1,2628 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Станция «Автоном»</title>
+  <meta name="description" content="2D-стратегия об автоматизации жизнеобеспечения космической станции.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16,2 29,9.5 29,22.5 16,30 3,22.5 3,9.5' fill='%23323c78' stroke='%23e8ecff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ffb547'/%3E%3C/svg%3E">
+  <style>
+/* =====================================================================
+   Станция «Автоном» — стили интерфейса.
+   Палитра: ночь станции (индиго) + цвета ресурсов + янтарь для действий.
+   Шрифты системные: игра работает без интернета.
+   ===================================================================== */
+:root {
+  --bg: #0d1230;
+  --panel: #161d44;
+  --panel-2: #1e2756;
+  --line: #2f3a78;
+  --text: #e8ecff;
+  --muted: #9aa4d8;
+  --accent: #ffb547;
+  --accent-ink: #2a1a00;
+  --danger: #ff5d6c;
+  --ok: #5ee08a;
+  --font: "Trebuchet MS", "Segoe UI", "Ubuntu", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 var(--font); }
+body { overflow: hidden; -webkit-tap-highlight-color: transparent; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#app {
+  display: grid;
+  height: 100vh; height: 100dvh;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "hud hud" "stage side" "build side";
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ---------- верхняя панель ---------- */
+#hud {
+  grid-area: hud;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+#res { display: flex; gap: 14px; flex: 1 1 auto; min-width: 0; }
+.meter { width: 128px; }
+.m-top { display: flex; align-items: baseline; gap: 6px; }
+.m-name { font-size: 13px; color: var(--muted); }
+.meter b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--c); }
+.meter small { font-size: 12px; font-variant-numeric: tabular-nums; margin-left: auto; }
+.meter small.pos { color: var(--ok); }
+.meter small.neg { color: var(--danger); }
+.m-bar { display: block; height: 5px; background: #0b0f26; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.m-bar em { display: block; height: 100%; width: 0; background: var(--c); transition: width .2s linear; }
+.meter.low .m-name { color: var(--danger); }
+.meter.low .m-bar { box-shadow: 0 0 0 1px var(--danger); }
+
+#popbox { min-width: 190px; }
+#pop b { font-size: 20px; }
+#pop span, #goal span { color: var(--muted); }
+#grow { font-size: 12.5px; color: var(--muted); }
+#goal { font-size: 15px; }
+#goal b { color: var(--accent); font-size: 18px; }
+.hud-btns { display: flex; gap: 6px; }
+.hud-btns button {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px;
+}
+.hud-btns button:hover { border-color: var(--accent); }
+
+/* ---------- карта ---------- */
+#stage {
+  grid-area: stage;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 0; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #151c47 0%, var(--bg) 70%);
+}
+#cv { display: block; touch-action: manipulation; border-radius: 6px; }
+
+#alert {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(255, 93, 108, .16); border: 1px solid var(--danger); color: #ffd6da;
+  padding: 6px 14px; border-radius: 20px; font-weight: bold; white-space: nowrap; pointer-events: none;
+  max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis;
+}
+#tutor {
+  position: absolute; left: 12px; bottom: 12px; max-width: 420px;
+  background: rgba(22, 29, 68, .96); border: 1px solid var(--accent); border-radius: 12px;
+  padding: 12px 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+}
+#tutor p { margin: 0 0 10px; }
+.tut-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tut-step { color: var(--muted); font-size: 12.5px; margin-right: auto; }
+#tutor button { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+#tutor button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#tutor button.ghost { background: transparent; color: var(--muted); }
+
+#toasts { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; }
+.toast { background: var(--panel-2); border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px; max-width: 300px; animation: pop .18s ease-out; }
+@keyframes pop { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
+#fps { position: absolute; left: 10px; top: 10px; font-size: 12px; color: var(--ok); font-variant-numeric: tabular-nums; }
+
+/* ---------- кнопки строительства ---------- */
+#buildbar {
+  grid-area: build;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;
+  padding: 10px 14px; background: var(--panel); border-top: 1px solid var(--line);
+}
+.bb {
+  position: relative; text-align: left;
+  display: grid; grid-template-columns: 12px 1fr; grid-template-rows: auto auto; column-gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+}
+.bb .sw { grid-row: 1 / 3; align-self: center; width: 12px; height: 12px; border-radius: 3px; background: var(--c); }
+.bb .bn { font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb .bc { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.bb .bc { display: flex; justify-content: space-between; align-items: center; }
+.bb kbd { font: 11px var(--font); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.bb:hover { border-color: var(--c); }
+.bb.on { border-color: var(--accent); background: #2b2f55; box-shadow: inset 0 0 0 1px var(--accent); }
+.bb.poor .bc { color: var(--danger); }
+.hl { animation: hl 1s ease-in-out infinite; }
+@keyframes hl { 50% { box-shadow: 0 0 0 3px var(--accent); } }
+
+/* ---------- боковая панель ---------- */
+#side {
+  grid-area: side;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border-left: 1px solid var(--line);
+}
+.tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+.tabs button { background: none; border: none; padding: 11px 6px; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+#panel { padding: 14px; overflow-y: auto; flex: 1; }
+#panel h3 { margin: 0 0 6px; font-size: 17px; }
+#panel .auto h3 + .hint { margin-top: 0; }
+#panel .auto h3:not(:first-child) { margin-top: 18px; }
+.hint, .desc, .empty p { color: var(--muted); font-size: 13.5px; }
+.obj-head { display: flex; align-items: center; gap: 8px; }
+.obj-head .sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); flex: none; }
+.lvl { margin-left: auto; color: var(--accent); font-size: 13px; }
+.status { font-weight: bold; margin: 8px 0; padding: 5px 9px; border-radius: 7px; background: var(--panel-2); border-left: 3px solid var(--muted); }
+.st-work { border-left-color: var(--ok); }
+.st-noInput { border-left-color: #4aa8ff; }
+.st-full, .st-lowPower { border-left-color: var(--accent); }
+.st-damaged { border-left-color: var(--danger); color: #ffd6da; }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin: 10px 0; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.actions button, .menu-btns button {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; text-align: center;
+}
+.actions button:hover:not(:disabled), .menu-btns button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: bold; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.ghost { background: transparent; color: var(--muted); }
+button.danger { background: transparent; border-color: var(--danger) !important; color: var(--danger); }
+button.cooling { opacity: .6; }
+
+.prio { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-direction: column; gap: 5px; }
+.prio li { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border-radius: 8px; padding: 5px 6px 5px 10px; counter-increment: p; }
+.prio li::before { content: counter(p); color: var(--muted); font-size: 12px; width: 12px; }
+.prio .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.prio .pn { flex: 1; }
+.prio button { background: none; border: 1px solid var(--line); border-radius: 6px; width: 30px; height: 28px; padding: 0; }
+.prio button:hover:not(:disabled) { border-color: var(--accent); }
+label.range { display: block; margin: 10px 0; font-size: 14px; }
+label.range input, label.range select { display: block; width: 100%; margin-top: 4px; accent-color: var(--accent); }
+label.range select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+label.check { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; font-size: 14px; }
+label.check input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+
+/* ---------- экраны ---------- */
+#overlay {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(7, 10, 30, .72); backdrop-filter: blur(3px);
+  padding: 16px;
+}
+#overlay[hidden] { display: none; }
+.card {
+  width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+}
+.card h1 { font-size: 40px; line-height: 1.05; margin: 0 0 10px; letter-spacing: -0.5px; }
+.card h2 { margin: 0 0 14px; font-size: 26px; }
+.card h3 { margin: 18px 0 6px; }
+.title p { color: var(--muted); font-size: 16px; max-width: 42ch; margin: 0 0 20px; }
+.menu-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.menu-btns button { padding: 11px 14px; font-size: 16px; }
+.foot { color: var(--muted); font-size: 12.5px; margin: 18px 0 0; }
+.levels { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.levels li { display: flex; gap: 12px; align-items: center; background: var(--panel-2); border-radius: 12px; padding: 12px 14px; }
+.levels li > div { flex: 1; }
+.levels p { margin: 3px 0 4px; color: var(--muted); font-size: 13.5px; }
+.levels small { color: var(--muted); }
+.levels li.locked { opacity: .55; }
+.levels button { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 9px; padding: 8px 14px; font-weight: bold; }
+.levels button:disabled { background: var(--line); color: var(--muted); }
+.stars { color: var(--accent); letter-spacing: 2px; }
+.stars.big { font-size: 34px; margin: 0 0 8px; }
+.help { padding-left: 18px; }
+.help li { margin: 6px 0; }
+.keys { grid-template-columns: auto 1fr; }
+.keys dt { color: var(--accent); }
+.keys dd { text-align: left; }
+.stats { max-width: 320px; }
+.moral { color: var(--muted); }
+.settings { margin-bottom: 4px; }
+
+/* ---------- телефон и узкий экран ---------- */
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  #app {
+    height: auto; min-height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: "hud" "stage" "build" "side";
+  }
+  #stage { aspect-ratio: 840 / 560; }
+  #side { border-left: none; border-top: 1px solid var(--line); }
+  #hud { gap: 8px 12px; padding: 8px 10px; }
+  #res { flex-basis: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .meter { width: auto; }
+  .m-name { font-size: 11px; }
+  .meter small { display: none; }
+  #popbox { min-width: 0; flex: 1; }
+  #buildbar { grid-template-columns: repeat(3, 1fr); padding: 8px 10px; gap: 6px; }
+  .bb kbd { display: none; }
+  #tutor { left: 6px; right: 6px; bottom: 6px; max-width: none; font-size: 13.5px; padding: 9px 10px; }
+  #alert { font-size: 12.5px; top: 6px; }
+  .card { padding: 20px; }
+  .card h1 { font-size: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl, .toast { animation: none; }
+  .hl { box-shadow: 0 0 0 3px var(--accent); }
+}
+
+</style>
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div id="res"></div>
+      <div id="popbox">
+        <div id="pop"></div>
+        <div id="grow"></div>
+      </div>
+      <div id="goal"></div>
+      <div class="hud-btns">
+        <button id="btnSpeed" title="Скорость игры (F)">1×</button>
+        <button id="btnPause" title="Пауза (P или Esc)">Пауза</button>
+      </div>
+    </header>
+
+    <main id="stage">
+      <canvas id="cv" aria-label="Карта станции"></canvas>
+      <div id="alert" role="status" hidden></div>
+      <div id="tutor" hidden></div>
+      <div id="toasts" aria-live="polite"></div>
+      <div id="fps" hidden></div>
+    </main>
+
+    <nav id="buildbar" aria-label="Строительство"></nav>
+
+    <aside id="side">
+      <div class="tabs" role="tablist">
+        <button data-tab="obj" class="on">Модуль</button>
+        <button data-tab="auto">Автоматизация</button>
+      </div>
+      <div id="panel"></div>
+    </aside>
+  </div>
+
+  <div id="overlay" hidden><div class="card" id="card"></div></div>
+
+  <!-- порядок важен: сначала данные, потом логика, потом интерфейс -->
+  <script>
+'use strict';
+// =====================================================================
+// data.js — ВСЕ игровые числа и описания. Логики здесь нет.
+// Хотите поменять баланс — меняйте только этот файл.
+// =====================================================================
+window.G = window.G || {};
+
+G.DATA = {
+  TILE: 56,            // размер клетки в логических пикселях
+  COLS: 15,            // ширина карты в клетках
+  ROWS: 10,            // высота карты в клетках
+  CORE: { x: 7, y: 5 },// где стоит ядро станции
+  STEP: 1 / 60,        // шаг симуляции (фиксированный)
+
+  RES_ORDER: ['energy', 'water', 'oxygen', 'food'],
+  RES: {
+    energy: { name: 'Энергия',  unit: 'Э', color: '#ffc145' },
+    water:  { name: 'Вода',     unit: 'В', color: '#4aa8ff' },
+    oxygen: { name: 'Кислород', unit: 'O₂', color: '#7ff0d8' },
+    food:   { name: 'Еда',      unit: 'Е', color: '#9be36b' }
+  },
+  // вместимость склада ядра
+  CORE_CAP: { energy: 300, water: 60, oxygen: 60, food: 60 },
+
+  BUILD_ORDER: ['solar', 'drill', 'electro', 'farm', 'habitat', 'dock'],
+  BUILDINGS: {
+    core: {
+      name: 'Ядро станции', color: '#e8ecff', cost: 0, buildable: false, housing: 4,
+      desc: 'Главный склад. Отсюда колонисты берут кислород, еду и воду.'
+    },
+    solar: {
+      short: 'Панель', name: 'Солнечная панель', color: '#6f9bff', cost: 20, energyProd: 2.0,
+      desc: 'Даёт энергию сразу в ядро. Дроны не нужны.'
+    },
+    drill: {
+      short: 'Ледобур', name: 'Ледобур', color: '#4aa8ff', cost: 30, energyUse: 1.0,
+      out: 'water', outRate: 0.5, outCap: 6,
+      desc: 'Добывает воду изо льда. Воду надо отвезти в ядро.'
+    },
+    electro: {
+      short: 'Электролиз', name: 'Электролизёр', color: '#7ff0d8', cost: 40, energyUse: 1.5,
+      in: 'water', inRate: 0.4, inCap: 6, out: 'oxygen', outRate: 0.6, outCap: 6,
+      desc: 'Делает кислород из воды. Воду надо привезти, кислород — увезти.'
+    },
+    farm: {
+      short: 'Ферма', name: 'Гидроферма', color: '#9be36b', cost: 45, energyUse: 1.0,
+      in: 'water', inRate: 0.3, inCap: 6, out: 'food', outRate: 0.4, outCap: 6,
+      desc: 'Выращивает еду на воде. Воду надо привезти, еду — увезти.'
+    },
+    habitat: {
+      short: 'Жильё', name: 'Жилой модуль', color: '#c9a7ff', cost: 50, housing: 4, housingPerLevel: 2,
+      desc: 'Место ещё для 4 колонистов. Без жилья население не растёт.'
+    },
+    dock: {
+      short: 'Дрон-док', name: 'Дрон-док', color: '#ffb547', cost: 60, drones: 2, dronesPerLevel: 1,
+      desc: 'Даёт 2 дрона. Дроны сами возят ресурсы и чинят модули.'
+    }
+  },
+
+  // улучшение модулей: каждый уровень ×1.4 к скорости работы
+  UPGRADE: {
+    maxLevel: 3,
+    rateMult: 1.4,
+    costMult: [0, 1.5, 2.5]   // цена перехода с уровня L = cost * costMult[L]
+  },
+
+  DRONE: {
+    speed: 2.6,          // клеток в секунду
+    moveEnergy: 0.08,    // энергия в секунду, пока летит
+    repairRate: 30,      // единиц прочности в секунду
+    repairEnergy: 1.5,   // энергия в секунду при ремонте
+    handling: 0.25,      // секунды на погрузку/разгрузку
+    upgrades: {
+      speed: { name: 'Скорость дронов', mult: [1, 1.3, 1.6, 1.9], cost: [50, 90, 140] },
+      cap:   { name: 'Грузоподъёмность', val:  [2, 3, 4, 5],       cost: [50, 90, 140] }
+    }
+  },
+
+  COLONIST: {
+    oxygen: 0.07, food: 0.045, water: 0.03,  // расход на 1 человека в секунду
+    growEvery: 18,       // секунд хорошей жизни до нового колониста
+    dieEvery: 10,        // секунд дефицита до потери колониста
+    growMin: { oxygen: 0.25, food: 0.25, water: 0.15 } // нужные запасы (доля склада)
+  },
+
+  DAMAGE: { brokenBelow: 60 },     // ниже этой прочности модуль не работает
+  MANUAL: { cooldown: 0.8, amount: 3 },
+
+  CATEGORIES: {
+    repair: 'Ремонт',
+    oxygen: 'Кислород',
+    food: 'Еда',
+    water: 'Вода'
+  },
+
+  STATUS: {
+    work: 'Работает',
+    noInput: 'Ждёт воду',
+    full: 'Склад модуля полон, нужен вывоз',
+    paused: 'Пауза: склад ядра почти полон',
+    off: 'Выключен',
+    damaged: 'Повреждён, нужен ремонт',
+    lowPower: 'Не хватает энергии',
+    idle: 'В строю'
+  },
+
+  LEVELS: [
+    {
+      name: 'Первая смена',
+      brief: 'Обучение. Наладьте воду и кислород, затем доведите станцию до 8 колонистов.',
+      goal: 8, solarMult: 1, meteor: null, tutorial: true, stars: [240, 360],
+      start: { energy: 150, water: 20, oxygen: 30, food: 25 },
+      rocks: [[1, 1], [2, 1], [12, 2], [13, 2], [13, 3], [3, 8], [10, 8], [11, 8], [0, 5]],
+      pre: [{ type: 'solar', x: 6, y: 3 }, { type: 'solar', x: 8, y: 3 }]
+    },
+    {
+      name: 'Пояс обломков',
+      brief: 'Метеориты ломают модули. Поставьте ремонт в программу дронов и вырастите станцию до 12 колонистов.',
+      goal: 12, solarMult: 1, stars: [300, 420],
+      meteor: { first: 60, interval: 70, warn: 8, hits: [3, 5], dmg: [35, 60] },
+      start: { energy: 120, water: 25, oxygen: 35, food: 30 },
+      rocks: [[0, 0], [1, 0], [0, 1], [4, 2], [4, 3], [10, 2], [10, 3], [10, 4], [3, 7], [4, 7],
+              [12, 6], [12, 7], [13, 7], [7, 9], [8, 9]],
+      pre: [{ type: 'solar', x: 6, y: 3 }, { type: 'solar', x: 8, y: 3 }, { type: 'solar', x: 7, y: 2 },
+            { type: 'drill', x: 6, y: 6 }, { type: 'electro', x: 8, y: 6 }, { type: 'dock', x: 7, y: 7 }]
+    },
+    {
+      name: 'Тусклая звезда',
+      brief: 'Солнце даёт на 30% меньше энергии, метеориты падают чаще. Цель: 16 колонистов.',
+      goal: 16, solarMult: 0.7, stars: [360, 480],
+      meteor: { first: 50, interval: 55, warn: 8, hits: [4, 6], dmg: [40, 65] },
+      start: { energy: 120, water: 30, oxygen: 40, food: 35 },
+      rocks: [[2, 2], [3, 2], [2, 3], [11, 1], [12, 1], [11, 6], [11, 7], [5, 8], [6, 8], [1, 6], [13, 4], [14, 4]],
+      pre: [{ type: 'solar', x: 6, y: 3 }, { type: 'solar', x: 8, y: 3 }, { type: 'solar', x: 7, y: 2 },
+            { type: 'solar', x: 8, y: 2 }, { type: 'drill', x: 6, y: 6 }, { type: 'drill', x: 5, y: 5 },
+            { type: 'electro', x: 8, y: 6 }, { type: 'farm', x: 9, y: 5 }, { type: 'dock', x: 7, y: 7 }]
+    },
+    {
+      name: 'Бесконечная вахта',
+      brief: 'Без финиша. Метеориты всё чаще. Счёт: сколько секунд станция продержится.',
+      goal: null, endless: true, solarMult: 0.85, stars: null,
+      meteor: { first: 60, interval: 65, warn: 8, hits: [3, 6], dmg: [35, 65], speedUp: 0.92, minInterval: 30 },
+      start: { energy: 120, water: 25, oxygen: 35, food: 30 },
+      rocks: [[0, 0], [1, 0], [0, 1], [4, 2], [4, 3], [10, 2], [10, 3], [10, 4], [3, 7], [4, 7],
+              [12, 6], [12, 7], [13, 7], [7, 9], [8, 9]],
+      pre: [{ type: 'solar', x: 6, y: 3 }, { type: 'solar', x: 8, y: 3 }, { type: 'solar', x: 7, y: 2 },
+            { type: 'drill', x: 6, y: 6 }, { type: 'electro', x: 8, y: 6 }, { type: 'dock', x: 7, y: 7 }]
+    }
+  ]
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// pathfinding.js — поиск пути A* для дронов + проверка, что новый модуль
+// не перекроет проход. Карта — сетка клеток, ходим в 4 стороны.
+// =====================================================================
+
+// Минимальная двоичная куча (приоритетная очередь) для A*.
+// Хранит пары (узел, приоритет); pop() отдаёт узел с наименьшим приоритетом.
+class MinHeap {
+  constructor() { this.items = []; }
+  get size() { return this.items.length; }
+  push(node, prio) {
+    const a = this.items;
+    a.push({ node, prio });
+    let i = a.length - 1;
+    while (i > 0) {                       // «всплытие» вверх
+      const p = (i - 1) >> 1;
+      if (a[p].prio <= a[i].prio) break;
+      [a[p], a[i]] = [a[i], a[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const a = this.items;
+    const top = a[0];
+    const last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      let i = 0;
+      for (;;) {                          // «погружение» вниз
+        const l = i * 2 + 1, r = l + 1;
+        let m = i;
+        if (l < a.length && a[l].prio < a[m].prio) m = l;
+        if (r < a.length && a[r].prio < a[m].prio) m = r;
+        if (m === i) break;
+        [a[m], a[i]] = [a[i], a[m]];
+        i = m;
+      }
+    }
+    return top.node;
+  }
+}
+
+G.Path = {
+  DIRS: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+
+  // Можно ли пролететь через клетку: внутри карты, не астероид, не модуль.
+  passable(s, x, y) {
+    if (x < 0 || y < 0 || x >= G.DATA.COLS || y >= G.DATA.ROWS) return false;
+    const c = s.grid[y][x];
+    return !c.rock && !c.b;
+  },
+
+  // A*: путь от (sx,sy) до любой свободной клетки РЯДОМ с модулем (tx,ty).
+  // Возвращает массив клеток [{x,y}, ...] без стартовой,
+  // [] — если уже стоим рядом, null — если дороги нет.
+  find(s, sx, sy, tx, ty) {
+    const W = G.DATA.COLS, H = G.DATA.ROWS;
+    const isGoal = (x, y) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
+    if (isGoal(sx, sy)) return [];
+
+    const h = (x, y) => Math.max(0, Math.abs(x - tx) + Math.abs(y - ty) - 1); // эвристика
+    const g = new Float32Array(W * H).fill(Infinity);   // цена пути от старта
+    const came = new Int32Array(W * H).fill(-1);        // откуда пришли
+    const closed = new Uint8Array(W * H);
+    const heap = new MinHeap();
+    const start = sy * W + sx;
+    g[start] = 0;
+    heap.push(start, h(sx, sy));
+
+    while (heap.size) {
+      const cur = heap.pop();
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const cx = cur % W, cy = (cur - cx) / W;
+      if (cur !== start && isGoal(cx, cy)) {
+        const path = [];
+        for (let n = cur; n !== start; n = came[n]) path.push({ x: n % W, y: Math.floor(n / W) });
+        return path.reverse();
+      }
+      for (const [dx, dy] of this.DIRS) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.passable(s, nx, ny)) continue;
+        const n = ny * W + nx;
+        if (closed[n]) continue;
+        const ng = g[cur] + 1;
+        if (ng < g[n]) {
+          g[n] = ng;
+          came[n] = cur;
+          heap.push(n, ng + h(nx, ny));
+        }
+      }
+    }
+    return null;
+  },
+
+  // Проверка планировки (поиск в ширину от ядра): у каждого модуля
+  // должна быть свободная соседняя клетка, до которой можно долететь от ядра.
+  // extra — клетка, где игрок хочет построить новый модуль.
+  layoutOk(s, extra) {
+    const W = G.DATA.COLS, H = G.DATA.ROWS;
+    const blocked = (x, y) => !this.passable(s, x, y) || (extra && extra.x === x && extra.y === y);
+    const seen = new Uint8Array(W * H);
+    const queue = [];
+    for (const [dx, dy] of this.DIRS) {
+      const x = s.core.x + dx, y = s.core.y + dy;
+      if (!blocked(x, y)) { seen[y * W + x] = 1; queue.push(x, y); }
+    }
+    if (!queue.length) return false;                 // ядро замуровано
+    for (let i = 0; i < queue.length; i += 2) {
+      const x = queue[i], y = queue[i + 1];
+      for (const [dx, dy] of this.DIRS) {
+        const nx = x + dx, ny = y + dy;
+        if (blocked(nx, ny) || seen[ny * W + nx]) continue;
+        seen[ny * W + nx] = 1;
+        queue.push(nx, ny);
+      }
+    }
+    const hasAccess = (x, y) => this.DIRS.some(([dx, dy]) => {
+      const nx = x + dx, ny = y + dy;
+      return nx >= 0 && ny >= 0 && nx < W && ny < H && seen[ny * W + nx];
+    });
+    for (const b of s.buildings) {
+      if (b.type !== 'core' && !hasAccess(b.x, b.y)) return false;
+    }
+    if (extra && !hasAccess(extra.x, extra.y)) return false;
+    return true;
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// world.js — состояние мира и действия игрока: построить, улучшить,
+// выключить, разобрать, «сделать руками».
+// Состояние s — обычный объект; его же сохраняем (см. save.js).
+// =====================================================================
+
+G.World = {
+  // Создать новую игру для миссии с номером levelIndex.
+  newState(levelIndex) {
+    const D = G.DATA, L = D.LEVELS[levelIndex];
+    const s = {
+      levelIndex,
+      t: 0,                                 // время миссии, сек
+      res: Object.assign({}, L.start),       // запасы в ядре
+      buildings: [], drones: [],
+      colonists: 4, growT: 0, deathT: 0,
+      deficit: { oxygen: false, food: false, water: false },
+      nextId: 1,
+      grid: this.makeGrid(L),
+      core: null,
+      // «Программа» автоматизации — её настраивает игрок
+      auto: { priority: ['repair', 'oxygen', 'food', 'water'], waterReserve: 10, autoOff: true, alarm: true },
+      droneUp: { speed: 0, cap: 0 },
+      meteor: L.meteor ? { next: L.meteor.first, interval: L.meteor.interval, warned: false } : null,
+      falling: [],                           // метеориты в полёте
+      coreReserved: { water: 0 },            // вода, которую уже «пообещали» дронам
+      power: 1, energyProd: 0, energyUse: 0,
+      manualCd: 0, dispT: 0,
+      stats: { byDrones: 0, manual: 0, built: 0, meteors: 0, born: 0, died: 0, peak: 4 },
+      events: [],                            // события для звука/эффектов/подсказок
+      over: null
+    };
+    s.core = this.place(s, 'core', D.CORE.x, D.CORE.y, true);
+    for (const p of L.pre) this.place(s, p.type, p.x, p.y, true);
+    return s;
+  },
+
+  makeGrid(L) {
+    const grid = [];
+    for (let y = 0; y < G.DATA.ROWS; y++) {
+      const row = [];
+      for (let x = 0; x < G.DATA.COLS; x++) row.push({ rock: false, b: null });
+      grid.push(row);
+    }
+    for (const [x, y] of L.rocks) grid[y][x].rock = true;
+    return grid;
+  },
+
+  def(b) { return G.DATA.BUILDINGS[b.type]; },
+  level(s) { return G.DATA.LEVELS[s.levelIndex]; },
+  rateMult(b) { return Math.pow(G.DATA.UPGRADE.rateMult, b.level - 1); },
+  broken(b) { return b.hp < G.DATA.DAMAGE.brokenBelow; },
+  byId(s, id) { return s.buildings.find(b => b.id === id) || null; },
+  at(s, x, y) {
+    if (x < 0 || y < 0 || x >= G.DATA.COLS || y >= G.DATA.ROWS) return null;
+    return s.grid[y][x].b;
+  },
+  count(s, type) { return s.buildings.filter(b => b.type === type).length; },
+
+  housing(s) {
+    let h = 0;
+    for (const b of s.buildings) {
+      const d = this.def(b);
+      if (d.housing) h += d.housing + (d.housingPerLevel || 0) * (b.level - 1);
+    }
+    return h;
+  },
+
+  canPlace(s, type, x, y) {
+    if (x < 0 || y < 0 || x >= G.DATA.COLS || y >= G.DATA.ROWS) return { ok: false, reason: '' };
+    const c = s.grid[y][x];
+    if (c.rock) return { ok: false, reason: 'Здесь астероид' };
+    if (c.b) return { ok: false, reason: 'Клетка занята' };
+    const cost = G.DATA.BUILDINGS[type].cost;
+    if (s.res.energy < cost) return { ok: false, reason: `Нужно ${cost} энергии` };
+    if (!G.Path.layoutOk(s, { x, y })) return { ok: false, reason: 'Модуль перекроет проход дронам' };
+    return { ok: true };
+  },
+
+  // free = true: бесплатно и без события (стартовые модули, загрузка)
+  place(s, type, x, y, free) {
+    const d = G.DATA.BUILDINGS[type];
+    const b = {
+      id: s.nextId++, type, x, y, level: 1, hp: 100, on: true,
+      inBuf: 0, outBuf: 0, reservedOut: 0, incoming: 0, repairer: null,
+      invested: free ? 0 : d.cost, status: 'idle', dead: false
+    };
+    s.buildings.push(b);
+    s.grid[y][x].b = b;
+    if (!free) {
+      s.res.energy -= d.cost;
+      s.stats.built++;
+      s.events.push({ type: 'build', b });
+    }
+    if (d.drones) for (let i = 0; i < d.drones; i++) this.addDrone(s, b);
+    for (const dr of s.drones) dr.repath = true;   // карта изменилась — пересчитать пути
+    return b;
+  },
+
+  addDrone(s, dock) {
+    s.drones.push({
+      id: s.nextId++, x: dock.x, y: dock.y, dockId: dock.id,
+      task: null, path: null, cargo: null, wait: 0, repath: false,
+      moving: false, repairing: false, bob: Math.random() * 6.28
+    });
+  },
+
+  upgradeCost(b) {
+    const U = G.DATA.UPGRADE;
+    if (b.type === 'core' || b.level >= U.maxLevel) return null;
+    return Math.round(this.def(b).cost * U.costMult[b.level]);
+  },
+
+  upgrade(s, b) {
+    const c = this.upgradeCost(b);
+    if (c === null) return false;
+    if (s.res.energy < c) { s.events.push({ type: 'error', msg: `Нужно ${c} энергии` }); return false; }
+    s.res.energy -= c;
+    b.level++;
+    b.invested += c;
+    const d = this.def(b);
+    if (d.dronesPerLevel) for (let i = 0; i < d.dronesPerLevel; i++) this.addDrone(s, b);
+    s.events.push({ type: 'upgrade', b });
+    return true;
+  },
+
+  toggle(s, b) {
+    if (b.type === 'core') return;
+    b.on = !b.on;
+    s.events.push({ type: 'click' });
+  },
+
+  refund(b) { return Math.floor(b.invested * 0.5); },
+
+  demolish(s, b) {
+    if (b.type === 'core') return;
+    // дроны этого дока исчезают, их задачи и грузы корректно отменяются
+    for (const d of s.drones.filter(d => d.dockId === b.id)) {
+      G.Drones.release(s, d);
+      if (d.cargo) G.Drones.dropToCore(s, d);
+    }
+    s.drones = s.drones.filter(d => d.dockId !== b.id);
+    s.res.energy = Math.min(G.DATA.CORE_CAP.energy, s.res.energy + this.refund(b));
+    b.dead = true;
+    s.grid[b.y][b.x].b = null;
+    s.buildings = s.buildings.filter(x => x !== b);
+    for (const dr of s.drones) dr.repath = true;
+    s.events.push({ type: 'demolish', b });
+  },
+
+  // Ручной труд: игрок сам переносит ресурс (медленно, с перезарядкой)
+  manual(s, b, kind) {
+    const D = G.DATA, d = this.def(b);
+    if (s.manualCd > 0) return false;
+    if (kind === 'out' && d.out) {
+      const amt = Math.max(0, b.outBuf - b.reservedOut);
+      if (amt < 0.05) { s.events.push({ type: 'error', msg: 'Пока нечего забирать' }); return false; }
+      b.outBuf -= amt;
+      s.res[d.out] = Math.min(D.CORE_CAP[d.out], s.res[d.out] + amt);
+      s.stats.manual += amt;
+      s.manualCd = D.MANUAL.cooldown;
+      s.events.push({ type: 'manual', b, res: d.out, amt });
+      return true;
+    }
+    if (kind === 'in' && d.in) {
+      const free = s.res.water - s.coreReserved.water;
+      const amt = Math.min(D.MANUAL.amount, d.inCap - b.inBuf - b.incoming, free);
+      if (amt < 0.05) {
+        s.events.push({ type: 'error', msg: free < 0.05 ? 'В ядре нет воды' : 'Модуль уже полон' });
+        return false;
+      }
+      s.res.water -= amt;
+      b.inBuf += amt;
+      s.stats.manual += amt;
+      s.manualCd = D.MANUAL.cooldown;
+      s.events.push({ type: 'manual', b, res: 'water', amt });
+      return true;
+    }
+    return false;
+  },
+
+  droneUpgradeCost(s, kind) {
+    const U = G.DATA.DRONE.upgrades[kind];
+    const lvl = s.droneUp[kind];
+    return lvl < U.cost.length ? U.cost[lvl] : null;
+  },
+
+  upgradeDrones(s, kind) {
+    const c = this.droneUpgradeCost(s, kind);
+    if (c === null) return false;
+    if (s.res.energy < c) { s.events.push({ type: 'error', msg: `Нужно ${c} энергии` }); return false; }
+    s.res.energy -= c;
+    s.droneUp[kind]++;
+    s.events.push({ type: 'upgrade' });
+    return true;
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// drones.js — конечный автомат (state machine) дрона.
+//
+// Дрон без задачи — «свободен». Диспетчер (dispatcher.js) выдаёт задачу,
+// и дрон проходит по фазам:
+//
+//   вывоз  (out):    toB (лететь к модулю, забрать) → dropCore (отвезти в ядро)
+//   подвоз (in):     pickCore (взять воду в ядре)  → toB (отдать в модуль)
+//   ремонт (repair): toB (лететь к модулю)         → repair (чинить до 100%)
+//
+// Если цель пропала или дороги нет — abort(): резервы освобождаются,
+// груз возвращается в ядро. Так ресурсы никогда не «теряются».
+// =====================================================================
+
+G.Drones = {
+  cap(s) { return G.DATA.DRONE.upgrades.cap.val[s.droneUp.cap]; },
+  speed(s) { return G.DATA.DRONE.speed * G.DATA.DRONE.upgrades.speed.mult[s.droneUp.speed]; },
+  tile(d) { return { x: Math.round(d.x), y: Math.round(d.y) }; },
+
+  // Цель текущей фазы: ядро или модуль
+  target(s, d) {
+    const p = d.task.phase;
+    if (p === 'pickCore' || p === 'dropCore') return s.core;
+    return G.World.byId(s, d.task.bId);
+  },
+
+  route(s, d, b) {
+    const t = this.tile(d);
+    d.path = G.Path.find(s, t.x, t.y, b.x, b.y);
+    d.repath = false;
+    return d.path !== null;
+  },
+
+  routePhase(s, d) {
+    const tb = this.target(s, d);
+    if (!tb || tb.dead || !this.route(s, d, tb)) this.abort(s, d);
+  },
+
+  // Начать задачу (вызывает диспетчер). Сразу резервируем ресурсы,
+  // чтобы два дрона не полетели за одним и тем же.
+  start(s, d, t) {
+    const def = G.DATA.BUILDINGS[t.b.type];
+    d.task = { kind: t.kind, bId: t.b.id, amt: t.amt, cat: t.cat, phase: null,
+               res: t.kind === 'out' ? def.out : (t.kind === 'in' ? 'water' : null) };
+    if (t.kind === 'out') {
+      t.b.reservedOut += t.amt;
+      d.task.phase = 'toB';
+    } else if (t.kind === 'in') {
+      t.b.incoming += t.amt;
+      s.coreReserved.water += t.amt;
+      d.task.phase = 'pickCore';
+    } else {
+      t.b.repairer = d.id;
+      d.task.phase = 'toB';
+    }
+    this.routePhase(s, d);
+  },
+
+  // Освободить всё, что зарезервировала текущая задача
+  release(s, d) {
+    const t = d.task;
+    if (!t) return;
+    const b = t.bId ? G.World.byId(s, t.bId) : null;
+    if (t.kind === 'out' && t.phase === 'toB' && b) b.reservedOut = Math.max(0, b.reservedOut - t.amt);
+    if (t.kind === 'in') {
+      if (t.phase === 'pickCore') s.coreReserved.water = Math.max(0, s.coreReserved.water - t.amt);
+      if (b && (t.phase === 'pickCore' || t.phase === 'toB')) b.incoming = Math.max(0, b.incoming - t.amt);
+    }
+    if (t.kind === 'repair' && b && b.repairer === d.id) b.repairer = null;
+  },
+
+  dropToCore(s, d) {
+    if (!d.cargo) return;
+    const cap = G.DATA.CORE_CAP[d.cargo.res];
+    s.res[d.cargo.res] = Math.min(cap, s.res[d.cargo.res] + d.cargo.amt);
+    d.cargo = null;
+  },
+
+  abort(s, d) {
+    this.release(s, d);
+    d.task = null;
+    d.path = null;
+    d.wait = 0.5;
+    if (d.cargo) {          // груз на борту — везём обратно в ядро
+      d.task = { kind: 'return', bId: null, amt: d.cargo.amt, phase: 'dropCore', res: d.cargo.res };
+      if (!this.route(s, d, s.core)) { this.dropToCore(s, d); d.task = null; }
+    }
+  },
+
+  move(s, d, dt) {
+    let step = this.speed(s) * (s.res.energy < 1 ? 0.45 : 1) * dt;  // без энергии — медленно
+    while (step > 0 && d.path.length) {
+      const n = d.path[0];
+      const dx = n.x - d.x, dy = n.y - d.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= step) {
+        d.x = n.x; d.y = n.y;
+        d.path.shift();
+        step -= dist;
+      } else {
+        d.x += dx / dist * step;
+        d.y += dy / dist * step;
+        step = 0;
+      }
+    }
+  },
+
+  update(s, dt) {
+    for (const d of s.drones) {
+      d.moving = false;
+      d.repairing = false;
+      if (d.wait > 0) { d.wait -= dt; continue; }   // погрузка/разгрузка
+      if (!d.task) continue;                         // свободен — ждёт диспетчера
+
+      const t = d.task;
+      const tb = this.target(s, d);
+      if (!tb || tb.dead) { this.abort(s, d); continue; }
+
+      if (t.phase === 'repair') { this.doRepair(s, d, tb, dt); continue; }
+
+      if (d.repath && !this.route(s, d, tb)) { this.abort(s, d); continue; }
+      if (!d.path) { this.abort(s, d); continue; }
+
+      if (d.path.length) {
+        this.move(s, d, dt);
+        d.moving = true;
+        if (d.path.length) continue;
+      }
+      this.arrive(s, d);
+    }
+  },
+
+  // Дрон долетел до цели текущей фазы
+  arrive(s, d) {
+    const t = d.task, D = G.DATA;
+    if (t.phase === 'toB') {
+      const b = G.World.byId(s, t.bId);
+      const def = D.BUILDINGS[b.type];
+      if (t.kind === 'out') {
+        b.reservedOut = Math.max(0, b.reservedOut - t.amt);
+        const take = Math.min(t.amt, b.outBuf);
+        b.outBuf -= take;
+        if (take < 0.01) { d.task = null; return; }
+        d.cargo = { res: t.res, amt: take };
+        t.phase = 'dropCore';
+        d.wait = D.DRONE.handling;
+        this.routePhase(s, d);
+      } else if (t.kind === 'in') {
+        b.incoming = Math.max(0, b.incoming - t.amt);
+        const put = Math.min(d.cargo ? d.cargo.amt : 0, def.inCap - b.inBuf);
+        b.inBuf += put;
+        s.stats.byDrones += put;
+        const left = (d.cargo ? d.cargo.amt : 0) - put;
+        d.cargo = null;
+        d.wait = D.DRONE.handling;
+        if (left > 0.01) {      // не влезло — излишек обратно в ядро
+          d.cargo = { res: 'water', amt: left };
+          t.kind = 'return';
+          t.phase = 'dropCore';
+          this.routePhase(s, d);
+        } else d.task = null;
+      } else if (t.kind === 'repair') {
+        t.phase = 'repair';
+      }
+    } else if (t.phase === 'pickCore') {
+      s.coreReserved.water = Math.max(0, s.coreReserved.water - t.amt);
+      const take = Math.min(t.amt, s.res.water);
+      if (take < 0.5) {         // воду уже выпили колонисты — отменяем
+        const b = G.World.byId(s, t.bId);
+        if (b) b.incoming = Math.max(0, b.incoming - t.amt);
+        d.task = null;
+        d.wait = 1;
+        return;
+      }
+      s.res.water -= take;
+      d.cargo = { res: 'water', amt: take };
+      t.phase = 'toB';
+      d.wait = D.DRONE.handling;
+      this.routePhase(s, d);
+    } else if (t.phase === 'dropCore') {
+      const amt = d.cargo ? d.cargo.amt : 0;
+      this.dropToCore(s, d);
+      if (t.kind === 'out') s.stats.byDrones += amt;
+      d.task = null;
+      d.wait = D.DRONE.handling;
+    }
+  },
+
+  doRepair(s, d, b, dt) {
+    d.repairing = true;
+    b.hp = Math.min(100, b.hp + G.DATA.DRONE.repairRate * dt * Math.max(0.3, s.power));
+    if (b.hp >= 100) {
+      b.repairer = null;
+      d.task = null;
+      d.wait = 0.2;
+      s.events.push({ type: 'repaired', b });
+    }
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// dispatcher.js — «мозг» автоматизации.
+// 1) Смотрит на станцию и составляет список задач.
+// 2) Сортирует их по ПРОГРАММЕ игрока (порядок категорий + правила).
+// 3) Каждому свободному дрону отдаёт самую важную и ближайшую задачу.
+// Игрок не возит ресурсы сам — он настраивает систему, а система работает.
+// =====================================================================
+
+G.Dispatcher = {
+  // Порядок категорий с учётом правила «Тревога»:
+  // если ресурса в ядре < 20%, его задачи поднимаются в начало.
+  order(s) {
+    let ord = s.auto.priority.slice();
+    if (s.auto.alarm) {
+      const low = ord.filter(c => c !== 'repair' && s.res[c] < G.DATA.CORE_CAP[c] * 0.2);
+      ord = low.concat(ord.filter(c => !low.includes(c)));
+    }
+    return ord;
+  },
+
+  // Составить список доступных задач
+  tasks(s) {
+    const cap = G.Drones.cap(s);
+    const list = [];
+    for (const b of s.buildings) {
+      if (b.type === 'core') continue;
+      const def = G.DATA.BUILDINGS[b.type];
+
+      if (G.World.broken(b)) {                       // сломан → ремонт
+        if (!b.repairer) list.push({ kind: 'repair', b, cat: 'repair', amt: 0 });
+        continue;
+      }
+      if (def.out) {                                  // есть продукция → вывоз
+        const avail = b.outBuf - b.reservedOut;
+        const full = b.outBuf >= def.outCap - 0.01;
+        if (avail >= Math.min(cap, 1.5) || (full && avail > 0.3)) {
+          list.push({ kind: 'out', b, cat: def.out, amt: Math.min(cap, avail) });
+        }
+      }
+      if (def.in && b.on) {                           // нужно сырьё → подвоз
+        const need = def.inCap - b.inBuf - b.incoming;
+        const free = s.res.water - s.coreReserved.water - s.auto.waterReserve;
+        const amt = Math.min(cap, need, free);
+        if (amt >= 1) list.push({ kind: 'in', b, cat: def.out, amt });
+      }
+    }
+    return list;
+  },
+
+  manhattan(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); },
+
+  // Раздать задачи свободным дронам
+  assign(s) {
+    const ord = this.order(s);
+    for (const d of s.drones) {
+      if (d.task || d.wait > 0) continue;
+      const tasks = this.tasks(s);          // пересчёт: учитываем только что сделанные резервы
+      if (!tasks.length) return;
+      let best = null, bestKey = Infinity;
+      for (const t of tasks) {
+        const dist = t.kind === 'in'
+          ? this.manhattan(d, s.core) + this.manhattan(s.core, t.b)
+          : this.manhattan(d, t.b);
+        const key = ord.indexOf(t.cat) * 1000 + dist;   // сначала важность, потом расстояние
+        if (key < bestKey) { bestKey = key; best = t; }
+      }
+      G.Drones.start(s, d, best);
+    }
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// sim.js — один шаг симуляции (вызывается 60 раз в секунду игрового
+// времени). Порядок: энергия и производство → колонисты → дроны →
+// диспетчер → метеориты → победа/поражение.
+// =====================================================================
+
+G.Sim = {
+  step(s, dt) {
+    if (s.over) return;
+    s.t += dt;
+    if (s.manualCd > 0) s.manualCd -= dt;
+
+    this.production(s, dt);
+    this.colonists(s, dt);
+    G.Drones.update(s, dt);
+
+    s.dispT -= dt;
+    if (s.dispT <= 0) { G.Dispatcher.assign(s); s.dispT = 0.2; }
+
+    this.meteors(s, dt);
+    this.checkEnd(s);
+  },
+
+  // ---------- энергия и работа модулей ----------
+  production(s, dt) {
+    const D = G.DATA, L = G.World.level(s);
+    let prod = 0, demand = 0;
+    const active = [];
+
+    for (const b of s.buildings) {
+      if (b.type === 'core') { b.status = 'idle'; continue; }
+      const def = D.BUILDINGS[b.type];
+      const mult = G.World.rateMult(b);
+      if (G.World.broken(b)) { b.status = 'damaged'; continue; }
+      if (!b.on) { b.status = 'off'; continue; }
+      if (def.energyProd) { prod += def.energyProd * mult * L.solarMult; b.status = 'work'; continue; }
+      if (!def.out) { b.status = 'idle'; continue; }
+
+      // правило автоматизации «выключать, если склад ядра полон»
+      if (s.auto.autoOff && s.res[def.out] >= D.CORE_CAP[def.out] * 0.9) { b.status = 'paused'; continue; }
+      if (b.outBuf >= def.outCap - 1e-6) { b.status = 'full'; continue; }
+      if (def.in && b.inBuf <= 1e-6) { b.status = 'noInput'; continue; }
+      demand += def.energyUse * mult;
+      active.push(b);
+    }
+
+    // дроны тоже тратят энергию (по флагам прошлого шага)
+    for (const d of s.drones) {
+      if (d.moving) demand += D.DRONE.moveEnergy;
+      if (d.repairing) demand += D.DRONE.repairEnergy;
+    }
+
+    const avail = s.res.energy + prod * dt;
+    const need = demand * dt;
+    s.power = need > 0 ? Math.min(1, avail / need) : 1;   // доля энергии, которую получили
+    s.res.energy = Math.min(D.CORE_CAP.energy, Math.max(0, avail - need * s.power));
+    s.energyProd = prod;
+    s.energyUse = demand;
+
+    for (const b of active) {
+      const def = D.BUILDINGS[b.type];
+      let k = s.power * dt * G.World.rateMult(b);           // «сколько работы» за шаг
+      if (def.in) {
+        const needIn = def.inRate * k;
+        if (b.inBuf < needIn) k *= b.inBuf / needIn;        // сырья мало — работаем частично
+        b.inBuf = Math.max(0, b.inBuf - def.inRate * k);
+      }
+      b.outBuf = Math.min(def.outCap, b.outBuf + def.outRate * k);
+      b.status = s.power < 0.99 ? 'lowPower' : 'work';
+    }
+  },
+
+  // ---------- жизнь колонистов ----------
+  colonists(s, dt) {
+    const C = G.DATA.COLONIST, CAP = G.DATA.CORE_CAP;
+    const n = s.colonists;
+    let lacking = false, o2Lack = false;
+    for (const r of ['oxygen', 'food', 'water']) {
+      const need = n * C[r] * dt;
+      if (s.res[r] >= need) { s.res[r] -= need; s.deficit[r] = false; }
+      else {
+        s.res[r] = 0; s.deficit[r] = true; lacking = true;
+        if (r === 'oxygen') o2Lack = true;
+      }
+    }
+
+    if (lacking) {
+      s.deathT += dt * (o2Lack ? 1.5 : 1);    // без кислорода — быстрее
+      if (s.deathT >= C.dieEvery) {
+        s.deathT = 0;
+        s.colonists--;
+        s.stats.died++;
+        s.events.push({ type: 'died' });
+      }
+    } else {
+      s.deathT = Math.max(0, s.deathT - dt * 0.5);
+    }
+
+    const roomy = s.colonists < G.World.housing(s);
+    const stocked = ['oxygen', 'food', 'water'].every(r => s.res[r] >= CAP[r] * C.growMin[r]);
+    if (roomy && stocked && !lacking) {
+      s.growT += dt;
+      if (s.growT >= C.growEvery) {
+        s.growT = 0;
+        s.colonists++;
+        s.stats.born++;
+        s.stats.peak = Math.max(s.stats.peak, s.colonists);
+        s.events.push({ type: 'born' });
+      }
+    }
+  },
+
+  // ---------- угроза: метеоритный дождь ----------
+  meteors(s, dt) {
+    const L = G.World.level(s), M = L.meteor;
+    if (M && s.meteor) {
+      if (!s.meteor.warned && s.t >= s.meteor.next - M.warn) {
+        s.meteor.warned = true;
+        s.events.push({ type: 'meteorWarn' });
+      }
+      if (s.t >= s.meteor.next) {
+        const targets = s.buildings.filter(b => b.type !== 'core');
+        const hits = M.hits[0] + Math.floor(Math.random() * (M.hits[1] - M.hits[0] + 1));
+        for (let i = 0; i < hits && targets.length; i++) {
+          const b = targets[Math.floor(Math.random() * targets.length)];
+          s.falling.push({ bId: b.id, x: b.x, y: b.y, t: -(i * 0.45 + Math.random() * 0.3), dur: 1.1,
+                           dmg: M.dmg[0] + Math.random() * (M.dmg[1] - M.dmg[0]) });
+        }
+        s.stats.meteors++;
+        if (M.speedUp) s.meteor.interval = Math.max(M.minInterval, s.meteor.interval * M.speedUp);
+        s.meteor.next += s.meteor.interval;
+        s.meteor.warned = false;
+      }
+    }
+    for (const f of s.falling) {
+      f.t += dt;
+      if (f.t >= f.dur && !f.done) {
+        f.done = true;
+        const b = G.World.byId(s, f.bId);
+        if (b) b.hp = Math.max(5, b.hp - f.dmg);
+        s.events.push({ type: 'impact', x: f.x, y: f.y });
+      }
+    }
+    s.falling = s.falling.filter(f => !f.done);
+  },
+
+  // ---------- победа / поражение ----------
+  checkEnd(s) {
+    const L = G.World.level(s);
+    if (s.colonists <= 0) {
+      s.over = { win: false, time: s.t, endless: !!L.endless };
+      s.events.push({ type: 'lose' });
+    } else if (L.goal && s.colonists >= L.goal) {
+      const stars = s.t <= L.stars[0] ? 3 : s.t <= L.stars[1] ? 2 : 1;
+      s.over = { win: true, time: s.t, stars };
+      s.events.push({ type: 'win' });
+    }
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// audio.js — вся музыка и звуки СИНТЕЗИРУЮТСЯ кодом (Web Audio API).
+// Нет ни одного аудиофайла → нет проблем с лицензиями и интернетом.
+// Браузер разрешает звук только после первого клика — поэтому init()
+// вызывается из обработчика кнопки.
+// =====================================================================
+
+G.Audio = {
+  ctx: null, vol: { music: 0.5, sfx: 0.7 }, musicOn: false, timer: null,
+  BAR: 3.0,                                    // длина такта, сек (80 BPM, 4 доли)
+  // Аккорды (MIDI-номера нот): Am — Fmaj7 — C — Em
+  CHORDS: [[57, 60, 64], [53, 57, 60, 64], [48, 52, 55, 59], [52, 55, 59]],
+  ARP: [0, 2, 1, 2, 0, 2, 1, 3],
+
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const c = this.ctx = new AC();
+    this.master = c.createGain(); this.master.connect(c.destination);
+    this.music = c.createGain(); this.music.connect(this.master);
+    this.sfx = c.createGain(); this.sfx.connect(this.master);
+    // простое «эхо» для атмосферы: задержка с обратной связью
+    this.musicIn = c.createGain();
+    const delay = c.createDelay(); delay.delayTime.value = 0.375;
+    const fb = c.createGain(); fb.gain.value = 0.32;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+    this.musicIn.connect(lp); lp.connect(this.music); lp.connect(delay);
+    delay.connect(fb); fb.connect(delay); delay.connect(this.music);
+    this.apply();
+  },
+
+  setVolume(kind, v) { this.vol[kind] = v; this.apply(); },
+  apply() {
+    if (!this.ctx) return;
+    this.music.gain.value = this.vol.music * 0.55;
+    this.sfx.gain.value = this.vol.sfx * 0.6;
+  },
+  duck(on) { if (this.ctx) this.music.gain.value = this.vol.music * (on ? 0.25 : 0.55); },
+
+  mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+
+  // Одна нота: осциллятор + огибающая громкости
+  tone(dest, freq, t0, dur, type, vol, attack, freqEnd) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t0);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.2, t0 + (attack || 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(dest);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  },
+
+  noise(dest, t0, dur, vol, freq) {
+    const c = this.ctx;
+    if (!this.noiseBuf) {
+      this.noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+      const data = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const src = c.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq || 800;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(dest);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  play(name) {
+    if (!this.ctx || this.vol.sfx <= 0) return;
+    const t = this.ctx.currentTime, d = this.sfx;
+    switch (name) {
+      case 'click':   this.tone(d, 660, t, 0.06, 'square', 0.05); break;
+      case 'build':   this.tone(d, 330, t, 0.18, 'triangle', 0.18, 0.01, 660);
+                      this.tone(d, 990, t + 0.09, 0.12, 'sine', 0.1); break;
+      case 'error':   this.tone(d, 150, t, 0.16, 'sawtooth', 0.07);
+                      this.tone(d, 120, t + 0.1, 0.16, 'sawtooth', 0.07); break;
+      case 'collect': this.tone(d, 880, t, 0.1, 'sine', 0.12);
+                      this.tone(d, 1320, t + 0.07, 0.12, 'sine', 0.1); break;
+      case 'upgrade': [523, 659, 784, 1047].forEach((f, i) => this.tone(d, f, t + i * 0.07, 0.16, 'triangle', 0.12)); break;
+      case 'warn':    for (let i = 0; i < 3; i++) this.tone(d, 520, t + i * 0.45, 0.35, 'square', 0.06, 0.02, 880); break;
+      case 'impact':  this.noise(d, t, 0.6, 0.5, 500); this.tone(d, 90, t, 0.4, 'sine', 0.3, 0.005, 40); break;
+      case 'born':    this.tone(d, 784, t, 0.3, 'sine', 0.12); this.tone(d, 1175, t + 0.12, 0.4, 'sine', 0.1); break;
+      case 'died':    this.tone(d, 392, t, 0.7, 'triangle', 0.14, 0.01, 180); break;
+      case 'repaired':this.tone(d, 660, t, 0.08, 'square', 0.05); this.tone(d, 990, t + 0.08, 0.1, 'square', 0.05); break;
+      case 'win':     [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(d, f, t + i * 0.13, 0.4, 'triangle', 0.14)); break;
+      case 'lose':    [392, 330, 262, 196].forEach((f, i) => this.tone(d, f, t + i * 0.22, 0.5, 'triangle', 0.14)); break;
+      case 'demolish':this.noise(d, t, 0.3, 0.25, 1200); break;
+    }
+  },
+
+  // ---------- фоновая музыка: планировщик тактов ----------
+  startMusic() {
+    if (!this.ctx || this.musicOn) return;
+    this.musicOn = true;
+    this.bar = 0;
+    this.nextBar = this.ctx.currentTime + 0.1;
+    this.timer = setInterval(() => this.schedule(), 150);
+  },
+  stopMusic() { this.musicOn = false; clearInterval(this.timer); },
+
+  schedule() {
+    // заранее (на 0.6 с вперёд) ставим ноты в очередь — так музыка не «заикается»
+    while (this.nextBar < this.ctx.currentTime + 0.6) {
+      this.playBar(this.nextBar, this.bar);
+      this.nextBar += this.BAR;
+      this.bar++;
+    }
+  },
+
+  playBar(t, i) {
+    const m = this.musicIn, chord = this.CHORDS[i % 4], B = this.BAR;
+    for (const n of chord) this.tone(m, this.mtof(n), t, B + 0.5, 'triangle', 0.035, 0.9);   // подложка
+    this.tone(m, this.mtof(chord[0] - 12), t, B * 0.9, 'sine', 0.11, 0.05);                  // бас
+    if (i % 8 >= 2) {                                                                          // арпеджио
+      const notes = chord.slice(0, 3).map(n => n + 12).concat([chord[0] + 24]);
+      for (let k = 0; k < 8; k++) {
+        if ((i + k) % 5 === 4) continue;           // пропуски — чтобы мелодия «дышала»
+        this.tone(m, this.mtof(notes[this.ARP[k]]), t + k * B / 8, 0.4, 'sine', 0.045);
+      }
+    }
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// save.js — сохранение и загрузка (localStorage браузера, без интернета).
+// Прогресс: открытые миссии, звёзды, рекорды, настройки.
+// Текущая игра: автосохранение каждые 15 секунд → кнопка «Продолжить».
+// =====================================================================
+
+G.Save = {
+  PKEY: 'avtonom_progress_v1',
+  RKEY: 'avtonom_run_v1',
+
+  defaults() {
+    return {
+      unlocked: 1, stars: {}, best: {}, tutorialDone: false,
+      settings: { music: 0.5, sfx: 0.7, showFps: false, particles: true, speed: 1 }
+    };
+  },
+
+  read(key) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }      // хранилище может быть недоступно — играем без него
+  },
+  write(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+    catch (e) { return false; }
+  },
+
+  loadProgress() {
+    const p = this.read(this.PKEY), d = this.defaults();
+    if (!p) return d;
+    return Object.assign(d, p, { settings: Object.assign(d.settings, p.settings || {}) });
+  },
+  saveProgress(p) { this.write(this.PKEY, p); },
+
+  // Снимок игры: только данные, без ссылок и путей дронов
+  saveRun(s) {
+    if (!s || s.over) return;
+    this.write(this.RKEY, {
+      v: 1, levelIndex: s.levelIndex, t: s.t, res: s.res, colonists: s.colonists,
+      growT: s.growT, deathT: s.deathT, nextId: s.nextId, auto: s.auto, droneUp: s.droneUp,
+      meteor: s.meteor, stats: s.stats,
+      buildings: s.buildings.map(b => ({ id: b.id, type: b.type, x: b.x, y: b.y, level: b.level, hp: b.hp,
+                                         on: b.on, inBuf: b.inBuf, outBuf: b.outBuf, invested: b.invested })),
+      drones: s.drones.map(d => ({ id: d.id, x: Math.round(d.x), y: Math.round(d.y), dockId: d.dockId, cargo: d.cargo }))
+    });
+  },
+
+  hasRun() { return !!this.read(this.RKEY); },
+  clearRun() { try { localStorage.removeItem(this.RKEY); } catch (e) { /* нет хранилища */ } },
+
+  // Восстановить игру. Задачи дронов сбрасываются: диспетчер выдаст новые.
+  loadRun() {
+    const r = this.read(this.RKEY);
+    if (!r || r.v !== 1 || !G.DATA.LEVELS[r.levelIndex]) return null;
+    try {
+      const s = G.World.newState(r.levelIndex);
+      s.buildings = []; s.drones = [];
+      s.grid = G.World.makeGrid(G.World.level(s));
+      for (const rb of r.buildings) {
+        const b = Object.assign({ reservedOut: 0, incoming: 0, repairer: null, status: 'idle', dead: false }, rb);
+        s.buildings.push(b);
+        s.grid[b.y][b.x].b = b;
+        if (b.type === 'core') s.core = b;
+      }
+      for (const rd of r.drones) {
+        s.drones.push({ id: rd.id, x: rd.x, y: rd.y, dockId: rd.dockId, task: null, path: null, cargo: null,
+                        wait: 0, repath: false, moving: false, repairing: false, bob: Math.random() * 6.28 });
+      }
+      Object.assign(s, { t: r.t, colonists: r.colonists, growT: r.growT, deathT: r.deathT, nextId: r.nextId,
+                         auto: r.auto, droneUp: r.droneUp, meteor: r.meteor, stats: r.stats });
+      s.res = Object.assign({}, r.res);
+      for (const rd of r.drones) if (rd.cargo) {      // груз, который дрон вёз, возвращаем в ядро
+        const cap = G.DATA.CORE_CAP[rd.cargo.res];
+        s.res[rd.cargo.res] = Math.min(cap, s.res[rd.cargo.res] + rd.cargo.amt);
+      }
+      if (s.meteor) s.meteor.warned = false;
+      return s.core ? s : null;
+    } catch (e) {
+      return null;           // повреждённое сохранение — просто начнём заново
+    }
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// render.js — рисование на <canvas>. Вся графика рисуется кодом
+// (фигуры, линии, градиенты) → никаких чужих картинок и лицензий.
+// Рендер только ЧИТАЕТ состояние игры и ничего в нём не меняет.
+// =====================================================================
+
+G.Render = {
+  init(cv) {
+    const D = G.DATA;
+    this.cv = cv;
+    this.ctx = cv.getContext('2d');
+    this.T = D.TILE;
+    this.W = D.COLS * D.TILE;
+    this.H = D.ROWS * D.TILE;
+    this.particles = [];
+    this.floats = [];
+    this.shake = 0;
+    this.rockCache = {};
+    this.stars = [];
+    for (let i = 0; i < 140; i++) {
+      this.stars.push({ x: Math.random() * this.W, y: Math.random() * this.H,
+                        r: Math.random() * 1.3 + 0.3, p: Math.random() * 6.28 });
+    }
+    this.resize();
+    const stage = document.getElementById('stage');
+    if (window.ResizeObserver) new ResizeObserver(() => this.resize()).observe(stage);
+    window.addEventListener('resize', () => this.resize());
+  },
+
+  resize() {
+    const st = document.getElementById('stage');
+    const w = st.clientWidth, h = st.clientHeight;
+    if (!w || !h) return;
+    const scale = Math.min(w / this.W, h / this.H);
+    const cw = Math.floor(this.W * scale), ch = Math.floor(this.H * scale);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.cv.style.width = cw + 'px';
+    this.cv.style.height = ch + 'px';
+    this.cv.width = Math.round(cw * dpr);
+    this.cv.height = Math.round(ch * dpr);
+    this.k = scale * dpr;
+  },
+
+  // Перевод координат экрана → клетка карты
+  toTile(clientX, clientY) {
+    const r = this.cv.getBoundingClientRect();
+    const lx = (clientX - r.left) / r.width * this.W;
+    const ly = (clientY - r.top) / r.height * this.H;
+    return { x: Math.floor(lx / this.T), y: Math.floor(ly / this.T) };
+  },
+
+  // ---------- эффекты, которые вызывает UI по событиям ----------
+  burst(tx, ty, color, n, speed) {
+    if (!G.Game.progress.settings.particles) return;
+    const cx = tx * this.T + this.T / 2, cy = ty * this.T + this.T / 2;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, v = (0.3 + Math.random()) * (speed || 90);
+      this.particles.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+                            life: 0.5 + Math.random() * 0.5, max: 1, color, r: 1.5 + Math.random() * 2 });
+    }
+  },
+  float(tx, ty, text, color) {
+    this.floats.push({ x: tx * this.T + this.T / 2, y: ty * this.T + 8, text, color, life: 1.4 });
+  },
+
+  // ---------- главный кадр ----------
+  draw(s, dt, ui) {
+    const c = this.ctx, T = this.T;
+    c.setTransform(this.k, 0, 0, this.k, 0, 0);
+    let ox = 0, oy = 0;
+    if (this.shake > 0) {
+      this.shake = Math.max(0, this.shake - dt * 30);
+      ox = (Math.random() - 0.5) * this.shake;
+      oy = (Math.random() - 0.5) * this.shake;
+    }
+    c.translate(ox, oy);
+    const time = performance.now() / 1000;
+
+    // космос
+    c.fillStyle = '#0d1230';
+    c.fillRect(-20, -20, this.W + 40, this.H + 40);
+    for (const st of this.stars) {
+      c.globalAlpha = 0.35 + 0.35 * Math.sin(time * 1.3 + st.p);
+      c.fillStyle = '#cfd8ff';
+      c.fillRect(st.x, st.y, st.r, st.r);
+    }
+    c.globalAlpha = 1;
+    if (!s) return;
+
+    this.drawGround(c, s);
+    if (ui.build && ui.hover) this.drawGhost(c, s, ui);
+    for (const b of s.buildings) this.drawBuilding(c, s, b, ui.selected === b.id, time);
+    this.drawDrones(c, s, time, ui);
+    this.drawMeteors(c, s, time);
+    this.drawFx(c, dt);
+    this.drawAlarm(c, s, time);
+  },
+
+  rockShape(x, y) {
+    const key = x + ',' + y;
+    if (this.rockCache[key]) return this.rockCache[key];
+    let seed = x * 73856093 ^ y * 19349663;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const pts = [], n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2, r = 17 + rnd() * 8;
+      pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    const craters = [[rnd() * 14 - 7, rnd() * 14 - 7, 3 + rnd() * 3], [rnd() * 14 - 7, rnd() * 14 - 7, 2 + rnd() * 2]];
+    return (this.rockCache[key] = { pts, craters });
+  },
+
+  drawGround(c, s) {
+    const T = this.T, D = G.DATA;
+    for (let y = 0; y < D.ROWS; y++) {
+      for (let x = 0; x < D.COLS; x++) {
+        const cell = s.grid[y][x];
+        if (cell.rock) {
+          const r = this.rockShape(x, y), cx = x * T + T / 2, cy = y * T + T / 2;
+          c.fillStyle = '#3a3550';
+          c.beginPath();
+          r.pts.forEach(([px, py], i) => i ? c.lineTo(cx + px, cy + py) : c.moveTo(cx + px, cy + py));
+          c.closePath(); c.fill();
+          c.strokeStyle = '#4e4870'; c.lineWidth = 2; c.stroke();
+          c.fillStyle = '#2a2640';
+          for (const [px, py, rr] of r.craters) { c.beginPath(); c.arc(cx + px, cy + py, rr, 0, 6.29); c.fill(); }
+        } else {
+          c.fillStyle = (x + y) % 2 ? '#182046' : '#1a2349';
+          c.fillRect(x * T + 1, y * T + 1, T - 2, T - 2);
+        }
+      }
+    }
+    // «рельсы» вокруг ядра — визуальный центр станции
+    c.strokeStyle = 'rgba(232,236,255,0.06)';
+    c.lineWidth = 1;
+    c.strokeRect(s.core.x * T - T + 0.5, s.core.y * T - T + 0.5, T * 3, T * 3);
+  },
+
+  drawGhost(c, s, ui) {
+    const T = this.T, h = ui.hover;
+    if (h.x < 0 || h.y < 0 || h.x >= G.DATA.COLS || h.y >= G.DATA.ROWS) return;
+    const ok = G.World.canPlace(s, ui.build, h.x, h.y).ok;
+    c.fillStyle = ok ? 'rgba(94,224,138,0.22)' : 'rgba(255,93,108,0.25)';
+    c.fillRect(h.x * T + 2, h.y * T + 2, T - 4, T - 4);
+    c.globalAlpha = 0.55;
+    this.drawIcon(c, ui.build, h.x * T + T / 2, h.y * T + T / 2, 0, true);
+    c.globalAlpha = 1;
+  },
+
+  roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  },
+
+  STATUS_COLOR: { work: '#5ee08a', noInput: '#4aa8ff', full: '#ffb547', paused: '#98a2d6',
+                  off: '#5a6290', damaged: '#ff5d6c', lowPower: '#ffc145' },
+
+  drawBuilding(c, s, b, selected, time) {
+    const T = this.T, D = G.DATA, def = D.BUILDINGS[b.type];
+    const x = b.x * T, y = b.y * T, cx = x + T / 2, cy = y + T / 2;
+    const broken = G.World.broken(b);
+    const working = b.status === 'work' || b.status === 'lowPower';
+
+    c.fillStyle = b.type === 'core' ? '#262f63' : '#212a55';
+    this.roundRect(c, x + 3, y + 3, T - 6, T - 6, 9);
+    c.fill();
+    c.strokeStyle = selected ? '#ffb547' : def.color;
+    c.globalAlpha = selected ? 1 : 0.55;
+    c.lineWidth = selected ? 2.5 : 1.5;
+    c.stroke();
+    c.globalAlpha = 1;
+
+    c.save();
+    if (!b.on || broken) c.globalAlpha = 0.5;
+    this.drawIcon(c, b.type, cx, cy, working ? time : 0, false, s);
+    c.restore();
+
+    // буферы: слева — вход (вода), справа — выход (продукция)
+    if (def.in) this.bar(c, x + 7, y + 12, 4, T - 24, b.inBuf / def.inCap, D.RES.water.color);
+    if (def.out) this.bar(c, x + T - 11, y + 12, 4, T - 24, b.outBuf / def.outCap, D.RES[def.out].color);
+
+    // уровень улучшения — точки снизу
+    for (let i = 0; i < b.level; i++) {
+      c.fillStyle = '#ffb547';
+      c.beginPath(); c.arc(cx - (b.level - 1) * 4 + i * 8, y + T - 8, 2.2, 0, 6.29); c.fill();
+    }
+
+    // прочность
+    if (b.hp < 100) {
+      c.fillStyle = '#0b0f26'; c.fillRect(x + 9, y + 5, T - 18, 4);
+      c.fillStyle = broken ? '#ff5d6c' : '#5ee08a';
+      c.fillRect(x + 9, y + 5, (T - 18) * b.hp / 100, 4);
+    }
+
+    // индикатор состояния
+    const sc = this.STATUS_COLOR[b.status];
+    if (sc && b.type !== 'core') {
+      const blink = (b.status === 'damaged' || b.status === 'noInput' || b.status === 'lowPower') ? 0.5 + 0.5 * Math.sin(time * 6) : 1;
+      c.globalAlpha = blink;
+      c.fillStyle = sc;
+      c.beginPath(); c.arc(x + T - 9, y + 9, 3.5, 0, 6.29); c.fill();
+      c.globalAlpha = 1;
+    }
+
+    if (broken) {              // трещины и дым
+      c.strokeStyle = '#ff5d6c'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(cx - 12, cy - 10); c.lineTo(cx - 3, cy - 2); c.lineTo(cx - 8, cy + 6);
+      c.moveTo(cx + 10, cy - 12); c.lineTo(cx + 4, cy + 1); c.lineTo(cx + 12, cy + 9); c.stroke();
+      if (Math.random() < 0.08 && G.Game.progress.settings.particles) {
+        this.particles.push({ x: cx + (Math.random() - 0.5) * 16, y: cy, vx: (Math.random() - 0.5) * 8, vy: -18,
+                              life: 1.2, max: 1.2, color: '#6b6f8f', r: 3 + Math.random() * 3, smoke: true });
+      }
+    }
+  },
+
+  bar(c, x, y, w, h, frac, color) {
+    c.fillStyle = '#0b0f26'; c.fillRect(x, y, w, h);
+    const f = Math.max(0, Math.min(1, frac));
+    c.fillStyle = color; c.fillRect(x, y + h * (1 - f), w, h * f);
+  },
+
+  // Иконки модулей. t — время анимации (0 = стоит).
+  drawIcon(c, type, cx, cy, t, ghost, s) {
+    const D = G.DATA;
+    c.lineWidth = 2;
+    switch (type) {
+      case 'core': {
+        c.fillStyle = '#323c78'; c.strokeStyle = '#e8ecff';
+        c.beginPath();
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; c.lineTo(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15); }
+        c.closePath(); c.fill(); c.stroke();
+        if (s) {                // кольцо из 4 дуг — запасы ядра
+          D.RES_ORDER.forEach((r, i) => {
+            const a0 = -Math.PI / 2 + i * Math.PI / 2 + 0.14, span = Math.PI / 2 - 0.28;
+            c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 3.5;
+            c.beginPath(); c.arc(cx, cy, 21, a0, a0 + span); c.stroke();
+            c.strokeStyle = D.RES[r].color;
+            c.beginPath(); c.arc(cx, cy, 21, a0, a0 + span * Math.min(1, s.res[r] / D.CORE_CAP[r])); c.stroke();
+          });
+        }
+        const p = 4 + Math.sin(performance.now() / 400) * 1.2;
+        c.fillStyle = '#ffb547'; c.beginPath(); c.arc(cx, cy, p, 0, 6.29); c.fill();
+        break;
+      }
+      case 'solar': {
+        c.save(); c.translate(cx, cy); c.rotate(-0.18);
+        c.fillStyle = '#1f3c94'; c.fillRect(-15, -11, 30, 22);
+        c.strokeStyle = '#8fb0ff'; c.lineWidth = 1;
+        c.strokeRect(-15, -11, 30, 22);
+        for (let i = 1; i < 3; i++) { c.beginPath(); c.moveTo(-15 + i * 10, -11); c.lineTo(-15 + i * 10, 11); c.stroke(); }
+        c.beginPath(); c.moveTo(-15, 0); c.lineTo(15, 0); c.stroke();
+        if (t) { c.fillStyle = 'rgba(255,255,255,' + (0.25 + 0.2 * Math.sin(t * 2)) + ')'; c.fillRect(-13, -9, 8, 7); }
+        c.restore();
+        break;
+      }
+      case 'drill': {
+        c.fillStyle = '#1d3354'; c.beginPath(); c.arc(cx, cy, 14, 0, 6.29); c.fill();
+        c.strokeStyle = D.RES.water.color; c.stroke();
+        c.save(); c.translate(cx, cy); c.rotate(t * 5);
+        c.strokeStyle = '#bcd9ff'; c.lineWidth = 3.5; c.lineCap = 'round';
+        for (let i = 0; i < 4; i++) {          // лопасти бура
+          c.rotate(Math.PI / 2);
+          c.beginPath(); c.moveTo(0, 0); c.lineTo(9, -4); c.stroke();
+        }
+        c.lineCap = 'butt';
+        c.restore();
+        c.fillStyle = '#e8f4ff'; c.beginPath(); c.arc(cx, cy, 3, 0, 6.29); c.fill();
+        break;
+      }
+      case 'electro': {
+        c.fillStyle = '#173a3d'; c.strokeStyle = D.RES.oxygen.color;
+        this.roundRect(c, cx - 10, cy - 15, 20, 30, 7); c.fill(); c.stroke();
+        c.fillStyle = D.RES.oxygen.color;
+        for (let i = 0; i < 4; i++) {
+          const yy = t ? 12 - ((t * 14 + i * 7) % 26) : 6 - i * 6;
+          c.globalAlpha = 0.85;
+          c.beginPath(); c.arc(cx + (i % 2 ? 3 : -3), cy + yy, 2.2 + (i % 2), 0, 6.29); c.fill();
+        }
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'farm': {
+        c.fillStyle = '#2b3a22'; this.roundRect(c, cx - 16, cy + 4, 32, 9, 3); c.fill();
+        c.strokeStyle = D.RES.food.color; c.fillStyle = D.RES.food.color; c.lineWidth = 2;
+        for (let i = -1; i <= 1; i++) {
+          const sway = t ? Math.sin(t * 2 + i) * 3 : 0;
+          const bx = cx + i * 10;
+          c.beginPath(); c.moveTo(bx, cy + 5); c.quadraticCurveTo(bx, cy - 4, bx + sway, cy - 12); c.stroke();
+          c.beginPath(); c.ellipse(bx + sway - 4, cy - 6, 4, 2.2, -0.6, 0, 6.29); c.fill();
+          c.beginPath(); c.ellipse(bx + sway + 4, cy - 9, 4, 2.2, 0.6, 0, 6.29); c.fill();
+        }
+        break;
+      }
+      case 'habitat': {
+        c.fillStyle = '#352c66'; c.strokeStyle = '#c9a7ff';
+        c.beginPath(); c.arc(cx, cy + 8, 18, Math.PI, 0); c.closePath(); c.fill(); c.stroke();
+        c.fillStyle = '#ffd98a';
+        for (let i = -1; i <= 1; i++) c.fillRect(cx + i * 9 - 2.5, cy - 1, 5, 5);
+        break;
+      }
+      case 'dock': {
+        c.strokeStyle = '#ffb547'; c.setLineDash([4, 3]);
+        c.beginPath(); c.arc(cx, cy, 16, 0, 6.29); c.stroke();
+        c.setLineDash([]);
+        c.beginPath(); c.moveTo(cx - 7, cy - 8); c.lineTo(cx - 7, cy + 8); c.moveTo(cx + 7, cy - 8);
+        c.lineTo(cx + 7, cy + 8); c.moveTo(cx - 7, cy); c.lineTo(cx + 7, cy); c.stroke();
+        if (t) {
+          c.fillStyle = Math.sin(t * 4) > 0 ? '#ffb547' : '#5a4320';
+          c.beginPath(); c.arc(cx, cy - 16, 2, 0, 6.29); c.arc(cx, cy + 16, 2, 0, 6.29); c.fill();
+        }
+        break;
+      }
+    }
+  },
+
+  drawDrones(c, s, time, ui) {
+    const T = this.T, D = G.DATA;
+    // маршруты — видно, как работает автоматизация
+    c.lineWidth = 1.5;
+    c.setLineDash([3, 5]);
+    for (const d of s.drones) {
+      if (!d.path || !d.path.length) continue;
+      c.strokeStyle = d.cargo ? D.RES[d.cargo.res].color : (d.task && d.task.kind === 'repair' ? '#ff5d6c' : '#98a2d6');
+      c.globalAlpha = ui.tab === 'auto' ? 0.55 : 0.25;
+      c.beginPath();
+      c.moveTo(d.x * T + T / 2, d.y * T + T / 2);
+      for (const p of d.path) c.lineTo(p.x * T + T / 2, p.y * T + T / 2);
+      c.stroke();
+    }
+    c.setLineDash([]);
+    c.globalAlpha = 1;
+
+    for (const d of s.drones) {
+      const x = d.x * T + T / 2, y = d.y * T + T / 2 + Math.sin(time * 4 + d.bob) * 1.5 - (d.task ? 0 : 0);
+      if (d.cargo) {
+        c.fillStyle = D.RES[d.cargo.res].color;
+        c.fillRect(x - 3.5, y + 5, 7, 6);
+      }
+      c.strokeStyle = 'rgba(207,216,255,0.6)'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, 8.5, 0, 6.29); c.stroke();
+      c.fillStyle = d.task ? '#e8ecff' : '#8a93c4';
+      c.beginPath(); c.arc(x, y, 5, 0, 6.29); c.fill();
+      // винты
+      const a = time * 20 + d.bob;
+      c.strokeStyle = 'rgba(232,236,255,0.8)';
+      c.beginPath(); c.moveTo(x + Math.cos(a) * 8, y + Math.sin(a) * 8); c.lineTo(x - Math.cos(a) * 8, y - Math.sin(a) * 8); c.stroke();
+      if (d.repairing && Math.random() < 0.5 && G.Game.progress.settings.particles) {
+        this.particles.push({ x: x + (Math.random() - 0.5) * 10, y: y + 6, vx: (Math.random() - 0.5) * 60,
+                              vy: -Math.random() * 60, life: 0.3, max: 0.3, color: '#ffe08a', r: 1.5 });
+      }
+    }
+  },
+
+  drawMeteors(c, s, time) {
+    const T = this.T;
+    for (const f of s.falling) {
+      const tx = f.x * T + T / 2, ty = f.y * T + T / 2;
+      if (f.t > -0.6) {            // прицел на модуле
+        c.strokeStyle = 'rgba(255,93,108,' + (0.5 + 0.5 * Math.sin(time * 14)) + ')';
+        c.lineWidth = 2;
+        c.beginPath(); c.arc(tx, ty, 22, 0, 6.29); c.stroke();
+      }
+      if (f.t < 0) continue;
+      const p = f.t / f.dur;
+      const x = tx + 260 * (1 - p), y = ty - 320 * (1 - p);
+      const g = c.createLinearGradient(x, y, x + 40, y - 50);
+      g.addColorStop(0, 'rgba(255,190,90,0.9)'); g.addColorStop(1, 'rgba(255,190,90,0)');
+      c.strokeStyle = g; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x + 40, y - 50); c.stroke();
+      c.fillStyle = '#ffd08a'; c.beginPath(); c.arc(x, y, 5, 0, 6.29); c.fill();
+    }
+  },
+
+  drawFx(c, dt) {
+    for (const p of this.particles) {
+      p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (!p.smoke) { p.vx *= 0.96; p.vy *= 0.96; }
+      c.globalAlpha = Math.max(0, p.life / p.max) * (p.smoke ? 0.5 : 1);
+      c.fillStyle = p.color;
+      c.beginPath(); c.arc(p.x, p.y, p.smoke ? p.r * (2 - p.life / p.max) : p.r, 0, 6.29); c.fill();
+    }
+    this.particles = this.particles.filter(p => p.life > 0);
+    if (this.particles.length > 400) this.particles.splice(0, this.particles.length - 400);
+
+    c.font = 'bold 13px "Trebuchet MS", "Segoe UI", sans-serif';
+    c.textAlign = 'center';
+    for (const f of this.floats) {
+      f.life -= dt; f.y -= dt * 22;
+      c.globalAlpha = Math.min(1, f.life);
+      c.fillStyle = '#0d1230'; c.fillText(f.text, f.x + 1, f.y + 1);
+      c.fillStyle = f.color; c.fillText(f.text, f.x, f.y);
+    }
+    this.floats = this.floats.filter(f => f.life > 0);
+    c.globalAlpha = 1;
+  },
+
+  // Красная рамка при тревоге: летят метеориты или людям нечем дышать
+  drawAlarm(c, s, time) {
+    const L = G.World.level(s);
+    const warn = s.meteor && L.meteor && s.t >= s.meteor.next - L.meteor.warn;
+    const lack = s.deficit.oxygen || s.deficit.food || s.deficit.water;
+    if (!warn && !lack && !s.falling.length) return;
+    const a = 0.18 + 0.14 * Math.sin(time * 6);
+    const g = c.createRadialGradient(this.W / 2, this.H / 2, this.H * 0.45, this.W / 2, this.H / 2, this.W * 0.65);
+    g.addColorStop(0, 'rgba(255,60,80,0)');
+    g.addColorStop(1, 'rgba(255,60,80,' + a + ')');
+    c.fillStyle = g;
+    c.fillRect(0, 0, this.W, this.H);
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// tutorial.js — обучение за первые ~60 секунд (только миссия 1).
+// Каждый шаг ждёт конкретного действия игрока (done) или кнопку «Дальше».
+// =====================================================================
+
+G.Tutorial = {
+  active: false, i: 0,
+
+  steps: [
+    { text: 'Колонисты тратят кислород, еду и воду из ядра — запасы видны сверху. Цель миссии: 8 колонистов.',
+      next: true },
+    { text: 'Постройте ледобур: нажмите «Ледобур» внизу, затем свободную клетку рядом с ядром.',
+      hl: '[data-type="drill"]', done: s => G.World.count(s, 'drill') > 0 },
+    { text: 'Теперь электролизёр — он делает кислород из воды.',
+      hl: '[data-type="electro"]', done: s => G.World.count(s, 'electro') > 0 },
+    { text: 'Нажмите на ледобур на карте и выберите «Забрать в ядро вручную». Так выглядит ручной труд.',
+      hl: null, done: s => s.stats.manual > 0 },
+    { text: 'Руками за всей станцией не успеть. Постройте дрон-док — дроны начнут возить ресурсы сами.',
+      hl: '[data-type="dock"]', done: s => G.World.count(s, 'dock') > 0 },
+    { text: 'Дроны работают без вас. Во вкладке «Автоматизация» задаётся их программа. Дальше: гидроферма для еды и жилой модуль для новых людей.',
+      hl: '[data-tab="auto"]', next: true }
+  ],
+
+  begin(s) {
+    this.el = document.getElementById('tutor');
+    this.active = !!G.World.level(s).tutorial;
+    this.i = 0;
+    if (this.active) this.show(); else this.hide();
+  },
+
+  update(s) {
+    if (!this.active) return;
+    const st = this.steps[this.i];
+    if (st.done && st.done(s)) this.advance();
+  },
+
+  advance() {
+    this.i++;
+    if (this.i >= this.steps.length) this.finish();
+    else { this.show(); G.Audio.play('click'); }
+  },
+
+  finish() {
+    this.active = false;
+    this.hide();
+    G.Game.progress.tutorialDone = true;
+    G.Save.saveProgress(G.Game.progress);
+  },
+
+  show() {
+    const st = this.steps[this.i];
+    this.el.hidden = false;
+    this.el.innerHTML =
+      `<p>${st.text}</p><div class="tut-row"><span class="tut-step">Шаг ${this.i + 1} из ${this.steps.length}</span>` +
+      (st.next ? '<button data-tut="next" class="primary">Дальше</button>' : '') +
+      '<button data-tut="skip" class="ghost">Пропустить обучение</button></div>';
+    document.querySelectorAll('.hl').forEach(e => e.classList.remove('hl'));
+    if (st.hl) document.querySelectorAll(st.hl).forEach(e => e.classList.add('hl'));
+  },
+
+  hide() {
+    if (!this.el) return;
+    this.el.hidden = true;
+    document.querySelectorAll('.hl').forEach(e => e.classList.remove('hl'));
+  },
+
+  onClick(e) {
+    const a = e.target.closest('[data-tut]');
+    if (!a) return;
+    if (a.dataset.tut === 'next') this.advance();
+    else this.finish();
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// ui.js — интерфейс: верхняя панель, кнопки строительства, боковая
+// панель (Модуль / Автоматизация), экраны меню, ввод мыши/тача/клавиш.
+// =====================================================================
+
+G.UI = {
+  build: null,       // какой модуль сейчас строим (или null)
+  hover: null,       // клетка под курсором
+  selected: null,    // id выбранного модуля
+  tab: 'obj',
+  screen: null,      // открытый экран-оверлей
+  backTo: null,
+  panelSig: '',
+  liveT: 0,
+  rateT: 0, rates: {}, prevRes: null,
+  confirmDemolish: null,
+
+  $(id) { return document.getElementById(id); },
+  get s() { return G.Game.state; },
+  fmt(v) { return v >= 10 ? Math.floor(v).toString() : v.toFixed(1); },
+  time(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + (s < 10 ? '0' : '') + s; },
+  esc(t) { return String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); },
+
+  init() {
+    const D = G.DATA;
+    // верхняя панель — 4 ресурса
+    this.$('res').innerHTML = D.RES_ORDER.map(r =>
+      `<div class="meter" style="--c:${D.RES[r].color}" title="${D.RES[r].name}">
+         <span class="m-top"><span class="m-name">${D.RES[r].name}</span><b data-v="${r}">0</b><small data-rate="${r}"></small></span>
+         <i class="m-bar"><em data-f="${r}"></em></i>
+       </div>`).join('');
+
+    // кнопки строительства
+    this.$('buildbar').innerHTML = D.BUILD_ORDER.map((t, i) => {
+      const b = D.BUILDINGS[t];
+      return `<button class="bb" data-type="${t}" style="--c:${b.color}" title="${b.name}: ${this.esc(b.desc)}">
+        <span class="sw"></span><span class="bn">${b.short}</span><span class="bc"><span>${b.cost} Э</span><kbd>${i + 1}</kbd></span></button>`;
+    }).join('');
+    this.$('buildbar').addEventListener('click', e => {
+      const btn = e.target.closest('[data-type]');
+      if (btn) this.pickBuild(btn.dataset.type);
+    });
+
+    document.querySelector('.tabs').addEventListener('click', e => {
+      const t = e.target.closest('[data-tab]');
+      if (t) this.setTab(t.dataset.tab);
+    });
+
+    const panel = this.$('panel');
+    panel.addEventListener('click', e => this.onPanelClick(e));
+    panel.addEventListener('input', e => this.onPanelInput(e));
+    panel.addEventListener('change', e => this.onPanelInput(e));
+
+    this.$('btnPause').addEventListener('click', () => { G.Audio.init(); this.show('pause'); });
+    this.$('btnSpeed').addEventListener('click', () => this.toggleSpeed());
+    this.$('tutor').addEventListener('click', e => G.Tutorial.onClick(e));
+
+    const ov = this.$('overlay');
+    ov.addEventListener('click', e => this.onOverlayClick(e));
+    ov.addEventListener('input', e => this.onSetting(e));
+    ov.addEventListener('change', e => this.onSetting(e));
+
+    // ввод на карте
+    const cv = this.$('cv');
+    cv.addEventListener('pointermove', e => { this.hover = G.Render.toTile(e.clientX, e.clientY); });
+    cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') this.hover = null; });
+    cv.addEventListener('pointerup', e => {
+      if (e.button === 2) return;
+      this.hover = G.Render.toTile(e.clientX, e.clientY);
+      this.onMapTap(this.hover);
+    });
+    cv.addEventListener('contextmenu', e => { e.preventDefault(); this.cancel(); });
+    window.addEventListener('keydown', e => this.onKey(e));
+  },
+
+  // ---------- карта ----------
+  onMapTap(t) {
+    const s = this.s;
+    if (!s || G.Game.paused || s.over) return;
+    G.Audio.init();
+    if (this.build) {
+      const r = G.World.canPlace(s, this.build, t.x, t.y);
+      if (r.ok) {
+        const b = G.World.place(s, this.build, t.x, t.y);
+        if (s.res.energy < G.DATA.BUILDINGS[this.build].cost) this.pickBuild(null);
+        this.select(b.id);
+      } else if (r.reason) {
+        G.Audio.play('error');
+        this.toast(r.reason);
+      }
+      return;
+    }
+    const b = G.World.at(s, t.x, t.y);
+    this.select(b ? b.id : null);
+    if (b) G.Audio.play('click');
+  },
+
+  select(id) {
+    this.selected = id;
+    this.confirmDemolish = null;
+    if (id !== null) this.setTab('obj');
+    this.renderPanel(true);
+  },
+
+  pickBuild(type) {
+    if (type && this.build === type) type = null;     // повторное нажатие — отмена
+    this.build = type;
+    document.querySelectorAll('.bb').forEach(b => b.classList.toggle('on', b.dataset.type === type));
+    if (type) G.Audio.play('click');
+  },
+
+  cancel() {
+    if (this.build) this.pickBuild(null);
+    else if (this.selected !== null) this.select(null);
+  },
+
+  toggleSpeed() {
+    G.Game.speed = G.Game.speed === 1 ? 2 : 1;
+    this.$('btnSpeed').textContent = G.Game.speed + '×';
+    G.Audio.play('click');
+  },
+
+  onKey(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    const s = this.s;
+    const k = e.key.toLowerCase();
+    if (k === 'escape') {
+      if (this.screen === 'pause') { this.hideOverlay(); return; }
+      if (this.screen) return;
+      if (this.build || this.selected !== null) this.cancel(); else if (s && !s.over) this.show('pause');
+      return;
+    }
+    if (this.screen || !s || s.over) return;
+    if (k === 'p' || k === 'з') { this.show('pause'); return; }
+    if (k === 'f' || k === 'а') { this.toggleSpeed(); return; }
+    if (k === 'u' || k === 'г') {
+      const b = this.selected !== null && G.World.byId(s, this.selected);
+      if (b) { G.World.upgrade(s, b); this.renderPanel(true); }
+      return;
+    }
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 6) this.pickBuild(G.DATA.BUILD_ORDER[n - 1]);
+  },
+
+  setTab(tab) {
+    this.tab = tab;
+    document.querySelectorAll('.tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    this.renderPanel(true);
+  },
+
+  // ---------- боковая панель ----------
+  sig() {
+    const s = this.s;
+    if (!s) return 'none';
+    if (this.tab === 'auto') return 'auto|' + s.auto.priority.join() + s.auto.autoOff + s.auto.alarm + s.droneUp.speed + s.droneUp.cap;
+    const b = this.selected !== null && G.World.byId(s, this.selected);
+    if (!b) return 'empty';
+    return ['obj', b.id, b.level, b.on, G.World.broken(b), this.confirmDemolish].join('|');
+  },
+
+  renderPanel(force) {
+    const s = this.s, sig = this.sig();
+    if (!force && sig === this.panelSig) return;
+    this.panelSig = sig;
+    const p = this.$('panel');
+    if (!s) { p.innerHTML = ''; return; }
+    if (this.tab === 'auto') p.innerHTML = this.autoHTML(s);
+    else {
+      const b = this.selected !== null && G.World.byId(s, this.selected);
+      if (!b) { if (this.selected !== null) this.selected = null; }
+      p.innerHTML = b ? this.objHTML(s, b) : this.emptyHTML();
+    }
+    this.live();
+  },
+
+  emptyHTML() {
+    return `<div class="empty"><h3>Модуль не выбран</h3>
+      <p>Нажмите на модуль на карте, чтобы увидеть его работу, улучшить или выключить.</p>
+      <p>Чтобы строить, выберите модуль на панели внизу, затем свободную клетку.</p></div>`;
+  },
+
+  objHTML(s, b) {
+    const D = G.DATA, def = D.BUILDINGS[b.type];
+    const rows = [];
+    if (b.type === 'core') {
+      for (const r of D.RES_ORDER) rows.push([D.RES[r].name, `<span data-k="core_${r}"></span>`]);
+      rows.push(['Колонисты', '<span data-k="pop"></span>']);
+    } else {
+      rows.push(['Прочность', '<span data-k="hp"></span>']);
+      if (def.in) rows.push(['Вода на входе', '<span data-k="in"></span>']);
+      if (def.out) rows.push([D.RES[def.out].name + ' на выходе', '<span data-k="out"></span>']);
+      if (def.out) rows.push(['Скорость', `${this.fmt(def.outRate * G.World.rateMult(b))} в сек.`]);
+      if (def.energyUse) rows.push(['Расход энергии', `${this.fmt(def.energyUse * G.World.rateMult(b))} Э/сек.`]);
+      if (def.energyProd) rows.push(['Выработка', `${this.fmt(def.energyProd * G.World.rateMult(b) * G.World.level(s).solarMult)} Э/сек.`]);
+      if (def.housing) rows.push(['Мест для людей', def.housing + def.housingPerLevel * (b.level - 1)]);
+      if (def.drones) rows.push(['Дронов', def.drones + def.dronesPerLevel * (b.level - 1)]);
+    }
+    const acts = [];
+    if (def.out) acts.push('<button data-action="manualOut">Забрать в ядро вручную</button>');
+    if (def.in) acts.push('<button data-action="manualIn">Принести воду вручную</button>');
+    const uc = G.World.upgradeCost(b);
+    if (uc !== null) acts.push(`<button data-action="upgrade" data-cost="${uc}" class="primary">Улучшить до ур. ${b.level + 1}: ${uc} Э</button>`);
+    else if (b.type !== 'core') acts.push('<button disabled>Максимальный уровень</button>');
+    if (b.type !== 'core') {
+      acts.push(`<button data-action="toggle">${b.on ? 'Выключить' : 'Включить'}</button>`);
+      acts.push(this.confirmDemolish === b.id
+        ? `<button data-action="demolish" class="danger">Точно разобрать? +${G.World.refund(b)} Э</button>`
+        : `<button data-action="demolish" class="ghost">Разобрать</button>`);
+    }
+    return `<div class="obj">
+      <div class="obj-head" style="--c:${def.color}"><span class="sw"></span><h3>${def.name}</h3>
+        ${b.type !== 'core' ? `<span class="lvl">ур. ${b.level}</span>` : ''}</div>
+      <p class="desc">${def.desc}</p>
+      ${b.type !== 'core' ? '<p class="status" data-k="status"></p>' : ''}
+      <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      <div class="actions">${acts.join('')}</div></div>`;
+  },
+
+  autoHTML(s) {
+    const D = G.DATA;
+    const colors = { repair: '#ff5d6c', oxygen: D.RES.oxygen.color, food: D.RES.food.color, water: D.RES.water.color };
+    const prio = s.auto.priority.map((c, i) =>
+      `<li style="--c:${colors[c]}"><span class="sw"></span><span class="pn">${D.CATEGORIES[c]}</span>
+        <button data-action="up" data-i="${i}" aria-label="Выше" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button data-action="down" data-i="${i}" aria-label="Ниже" ${i === s.auto.priority.length - 1 ? 'disabled' : ''}>▼</button></li>`).join('');
+    const up = kind => {
+      const U = D.DRONE.upgrades[kind], c = G.World.droneUpgradeCost(s, kind);
+      return c === null
+        ? `<button disabled>${U.name}: максимум</button>`
+        : `<button data-action="drone_${kind}" data-cost="${c}">${U.name}: ур. ${s.droneUp[kind] + 2} за ${c} Э</button>`;
+    };
+    return `<div class="auto">
+      <h3>Программа дронов</h3>
+      <p class="hint">Свободный дрон берёт задачу из верхней категории, а среди равных — ближайшую.</p>
+      <ol class="prio">${prio}</ol>
+      <label class="range">Не отдавать заводам последнюю воду: <b data-k="reserve"></b>
+        <input type="range" min="0" max="30" step="1" value="${s.auto.waterReserve}" data-action="reserve"></label>
+      <label class="check"><input type="checkbox" data-action="autoOff" ${s.auto.autoOff ? 'checked' : ''}>
+        Ставить производство на паузу, когда склад ядра заполнен на 90%</label>
+      <label class="check"><input type="checkbox" data-action="alarm" ${s.auto.alarm ? 'checked' : ''}>
+        Тревога: если ресурса меньше 20%, его задачи идут первыми</label>
+      <h3>Дроны</h3>
+      <dl><dt>Всего</dt><dd data-k="dn"></dd><dt>Заняты</dt><dd data-k="db"></dd>
+        <dt>Перевезли дроны</dt><dd data-k="dd"></dd><dt>Перенесено вручную</dt><dd data-k="dm"></dd></dl>
+      <div class="actions">${up('speed')}${up('cap')}</div></div>`;
+  },
+
+  // обновление чисел в панели без перерисовки разметки
+  live() {
+    const s = this.s;
+    if (!s) return;
+    const D = G.DATA, vals = {};
+    const b = this.selected !== null && G.World.byId(s, this.selected);
+    if (b) {
+      const def = D.BUILDINGS[b.type];
+      vals.status = D.STATUS[b.status] || '';
+      vals.hp = Math.round(b.hp) + '%';
+      if (def.in) vals.in = this.fmt(b.inBuf) + ' / ' + def.inCap;
+      if (def.out) vals.out = this.fmt(b.outBuf) + ' / ' + def.outCap;
+      for (const r of D.RES_ORDER) vals['core_' + r] = Math.floor(s.res[r]) + ' / ' + D.CORE_CAP[r];
+      vals.pop = s.colonists + ' / ' + G.World.housing(s) + ' мест';
+      const st = this.$('panel').querySelector('[data-k="status"]');
+      if (st) st.className = 'status st-' + b.status;
+    }
+    vals.reserve = s.auto.waterReserve;
+    vals.dn = s.drones.length;
+    vals.db = s.drones.filter(d => d.task).length;
+    vals.dd = Math.floor(s.stats.byDrones);
+    vals.dm = Math.floor(s.stats.manual);
+    this.$('panel').querySelectorAll('[data-k]').forEach(el => {
+      const v = vals[el.dataset.k];
+      if (v !== undefined && el.textContent !== String(v)) el.textContent = v;
+    });
+    this.$('panel').querySelectorAll('[data-cost]').forEach(el => { el.disabled = s.res.energy < +el.dataset.cost; });
+    this.$('panel').querySelectorAll('[data-action="manualOut"],[data-action="manualIn"]').forEach(el => {
+      el.classList.toggle('cooling', s.manualCd > 0);
+    });
+  },
+
+  onPanelClick(e) {
+    const btn = e.target.closest('button[data-action]');
+    const s = this.s;
+    if (!btn || !s || s.over) return;
+    G.Audio.init();
+    const a = btn.dataset.action;
+    const b = this.selected !== null && G.World.byId(s, this.selected);
+    if (a === 'manualOut' && b) G.World.manual(s, b, 'out');
+    else if (a === 'manualIn' && b) G.World.manual(s, b, 'in');
+    else if (a === 'upgrade' && b) G.World.upgrade(s, b);
+    else if (a === 'toggle' && b) G.World.toggle(s, b);
+    else if (a === 'demolish' && b) {
+      if (this.confirmDemolish === b.id) { G.World.demolish(s, b); this.selected = null; this.confirmDemolish = null; }
+      else this.confirmDemolish = b.id;
+    } else if (a === 'up' || a === 'down') {
+      const i = +btn.dataset.i, j = a === 'up' ? i - 1 : i + 1, p = s.auto.priority;
+      if (j >= 0 && j < p.length) { [p[i], p[j]] = [p[j], p[i]]; G.Audio.play('click'); }
+    } else if (a === 'drone_speed') G.World.upgradeDrones(s, 'speed');
+    else if (a === 'drone_cap') G.World.upgradeDrones(s, 'cap');
+    this.renderPanel(true);
+  },
+
+  onPanelInput(e) {
+    const el = e.target, s = this.s;
+    if (!s || !el.dataset.action) return;
+    if (el.dataset.action === 'reserve') { s.auto.waterReserve = +el.value; this.live(); }
+    if (el.dataset.action === 'autoOff') s.auto.autoOff = el.checked;
+    if (el.dataset.action === 'alarm') s.auto.alarm = el.checked;
+  },
+
+  // ---------- верхняя панель и тревоги ----------
+  update(dt) {
+    const s = this.s;
+    if (!s) return;
+    const D = G.DATA;
+    this.liveT -= dt;
+    if (this.liveT > 0) return;
+    this.liveT = 0.2;
+
+    // скорость изменения запасов (раз в секунду)
+    this.rateT -= 0.2;
+    if (this.rateT <= 0 || !this.prevRes) {
+      if (this.prevRes && !G.Game.paused) {
+        for (const r of D.RES_ORDER) this.rates[r] = (s.res[r] - this.prevRes[r]) / G.Game.speed; // в игровую секунду
+      }
+      this.prevRes = Object.assign({}, s.res);
+      this.rateT = 1;
+    }
+    for (const r of D.RES_ORDER) {
+      const v = document.querySelector(`[data-v="${r}"]`);
+      v.textContent = Math.floor(s.res[r]);
+      document.querySelector(`[data-f="${r}"]`).style.width = Math.min(100, s.res[r] / D.CORE_CAP[r] * 100) + '%';
+      const rt = this.rates[r] || 0;
+      const el = document.querySelector(`[data-rate="${r}"]`);
+      el.textContent = Math.abs(rt) < 0.05 ? '' : (rt > 0 ? '+' : '−') + Math.abs(rt).toFixed(1);
+      el.className = rt < -0.05 ? 'neg' : 'pos';
+      v.parentElement.parentElement.classList.toggle('low', r !== 'energy' && s.res[r] < D.CORE_CAP[r] * 0.2);
+    }
+
+    const L = G.World.level(s);
+    this.$('pop').innerHTML = `Колонисты: <b>${s.colonists}</b> <span>из ${G.World.housing(s)} мест</span>`;
+    this.$('goal').innerHTML = L.goal
+      ? `Цель: <b>${L.goal}</b> <span>${this.time(s.t)}</span>`
+      : `Продержаться <span>${this.time(s.t)}</span>`;
+    this.$('grow').textContent = this.growthInfo(s);
+
+    // главная тревога
+    const al = this.$('alert');
+    let msg = '';
+    const M = L.meteor;
+    if (s.falling.length) msg = 'Метеориты! Дроны починят модули по программе';
+    else if (M && s.meteor && s.t >= s.meteor.next - M.warn) msg = `Метеоритный дождь через ${Math.ceil(s.meteor.next - s.t)} с`;
+    else if (s.deficit.oxygen) msg = 'Нет кислорода — колонисты задыхаются';
+    else if (s.deficit.food) msg = 'Нет еды — колонисты слабеют';
+    else if (s.deficit.water) msg = 'Нет воды — колонисты слабеют';
+    else if (s.power < 0.98 && s.energyUse > 0) msg = 'Не хватает энергии: постройте солнечные панели';
+    al.hidden = !msg;
+    if (msg && al.textContent !== msg) al.textContent = msg;
+
+    // доступность кнопок строительства
+    document.querySelectorAll('.bb').forEach(btn => {
+      btn.classList.toggle('poor', s.res.energy < D.BUILDINGS[btn.dataset.type].cost);
+    });
+
+    this.renderPanel(false);
+    this.live();
+    this.$('fps').hidden = !G.Game.progress.settings.showFps;
+    if (G.Game.progress.settings.showFps) this.$('fps').textContent = G.Game.fps.v + ' FPS';
+  },
+
+  growthInfo(s) {
+    const D = G.DATA, C = D.COLONIST;
+    if (s.deficit.oxygen || s.deficit.food || s.deficit.water) return 'Рост остановлен: дефицит';
+    if (s.colonists >= G.World.housing(s)) return 'Рост остановлен: нужен жилой модуль';
+    for (const r of ['oxygen', 'food', 'water']) {
+      const need = Math.ceil(D.CORE_CAP[r] * C.growMin[r]);
+      if (s.res[r] < need) return `Рост остановлен: ${D.RES[r].name.toLowerCase()} меньше ${need}`;
+    }
+    return `Новый колонист через ${Math.max(1, Math.ceil(C.growEvery - s.growT))} с`;
+  },
+
+  // ---------- события игры → звук, эффекты, сообщения ----------
+  consume(s) {
+    const D = G.DATA, R = G.Render;
+    for (const e of s.events) {
+      switch (e.type) {
+        case 'build': G.Audio.play('build'); R.burst(e.b.x, e.b.y, D.BUILDINGS[e.b.type].color, 16); break;
+        case 'demolish': G.Audio.play('demolish'); R.burst(e.b.x, e.b.y, '#98a2d6', 12); break;
+        case 'upgrade': G.Audio.play('upgrade'); if (e.b) R.float(e.b.x, e.b.y, 'Уровень ' + e.b.level, '#ffb547'); break;
+        case 'error': G.Audio.play('error'); this.toast(e.msg); break;
+        case 'click': G.Audio.play('click'); break;
+        case 'manual': G.Audio.play('collect'); R.float(e.b.x, e.b.y, '+' + e.amt.toFixed(1), D.RES[e.res].color); break;
+        case 'born': G.Audio.play('born'); R.float(s.core.x, s.core.y, '+1 колонист', '#9be36b'); break;
+        case 'died': G.Audio.play('died'); R.float(s.core.x, s.core.y, '−1 колонист', '#ff5d6c');
+          this.toast('Колонист погиб. Проверьте запасы кислорода, еды и воды.'); break;
+        case 'meteorWarn': G.Audio.play('warn'); break;
+        case 'impact': G.Audio.play('impact'); R.burst(e.x, e.y, '#ffb06a', 26, 140); R.shake = 9; break;
+        case 'repaired': G.Audio.play('repaired'); R.float(e.b.x, e.b.y, 'Починено', '#5ee08a'); break;
+      }
+    }
+    s.events.length = 0;
+  },
+
+  toast(msg) {
+    const box = this.$('toasts');
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    box.appendChild(el);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => el.remove(), 2600);
+  },
+
+  onNewState() {
+    this.build = null; this.selected = null; this.hover = null;
+    this.prevRes = null; this.rates = {};
+    document.querySelectorAll('.bb').forEach(b => b.classList.remove('on'));
+    this.$('btnSpeed').textContent = G.Game.speed + '×';
+    this.setTab('obj');
+    this.liveT = 0;
+  },
+
+  // ---------- экраны ----------
+  show(screen) {
+    G.Audio.init();
+    if (screen !== this.screen && (screen === 'settings' || screen === 'help')) this.backTo = this.screen;
+    this.screen = screen;
+    const s = this.s;
+    if (s && !s.over) G.Game.paused = true;
+    G.Audio.duck(!!s);
+    this.$('card').innerHTML = this['scr_' + screen]();
+    this.$('overlay').hidden = false;
+    const first = this.$('card').querySelector('button:not([disabled])');
+    if (first) first.focus({ preventScroll: true });
+  },
+
+  hideOverlay() {
+    this.$('overlay').hidden = true;
+    this.screen = null;
+    G.Game.paused = false;
+    G.Audio.duck(false);
+  },
+
+  scr_menu() {
+    const cont = G.Save.hasRun() ? '<button data-go="continue" class="primary">Продолжить</button>' : '';
+    return `<div class="title"><h1>Станция «Автоном»</h1>
+      <p>Колонисты дышат, пока работают ваши дроны. Настройте автоматику — и станция будет жить сама.</p></div>
+      <div class="menu-btns">${cont}
+        <button data-go="levels" class="${cont ? '' : 'primary'}">Миссии</button>
+        <button data-go="help">Как играть</button>
+        <button data-go="settings">Настройки</button></div>
+      <p class="foot">Gambit Hackathon 2026, тема AUTOMATE IT!</p>`;
+  },
+
+  scr_levels() {
+    const p = G.Game.progress;
+    const items = G.DATA.LEVELS.map((L, i) => {
+      const locked = i >= p.unlocked;
+      const st = p.stars[i] || 0;
+      const meta = L.endless
+        ? (p.best[i] ? `Рекорд: ${this.time(p.best[i])}` : 'Рекорда пока нет')
+        : `<span class="stars" aria-label="${st} из 3">${'★'.repeat(st)}${'☆'.repeat(3 - st)}</span>` +
+          (p.best[i] ? ` Лучшее время ${this.time(p.best[i])}` : '');
+      return `<li class="${locked ? 'locked' : ''}"><div><b>${i + 1}. ${L.name}</b><p>${L.brief}</p><small>${meta}</small></div>
+        <button data-go="start" data-i="${i}" ${locked ? 'disabled' : ''}>${locked ? 'Закрыто' : 'Начать'}</button></li>`;
+    }).join('');
+    return `<h2>Миссии</h2><ul class="levels">${items}</ul>
+      <div class="menu-btns"><button data-go="menu">Назад</button></div>`;
+  },
+
+  scr_pause() {
+    return `<h2>Пауза</h2><div class="menu-btns">
+      <button data-go="resume" class="primary">Продолжить</button>
+      <button data-go="help">Как играть</button>
+      <button data-go="settings">Настройки</button>
+      <button data-go="restart">Начать миссию заново</button>
+      <button data-go="tomenu">Сохранить и выйти в меню</button></div>`;
+  },
+
+  scr_help() {
+    return `<h2>Как играть</h2>
+      <p>Цель — вырастить станцию до нужного числа колонистов. Люди тратят кислород, еду и воду из ядра. Если чего-то нет, колонисты начинают погибать.</p>
+      <ul class="help">
+        <li>Ледобур добывает воду, электролизёр делает из воды кислород, гидроферма выращивает еду. Энергия от солнечных панелей идёт в ядро сама.</li>
+        <li>Воду, кислород и еду надо перевозить между модулями и ядром. Руками это медленно — постройте дрон-док.</li>
+        <li>Вкладка «Автоматизация» — программа дронов: порядок задач, резерв воды и правила. Хорошая программа важнее количества дронов.</li>
+        <li>Улучшайте модули и дронов, чтобы система работала быстрее. Метеориты ломают модули — дроны чинят их, если ремонт есть в программе.</li>
+      </ul>
+      <h3>Управление</h3>
+      <dl class="keys">
+        <dt>1–6</dt><dd>выбрать модуль для стройки</dd>
+        <dt>Клик или тап</dt><dd>построить или выбрать модуль</dd>
+        <dt>Правый клик, Esc</dt><dd>отменить</dd>
+        <dt>U</dt><dd>улучшить выбранный модуль</dd>
+        <dt>P, Esc</dt><dd>пауза</dd>
+        <dt>F</dt><dd>скорость 1× / 2×</dd>
+      </dl>
+      <div class="menu-btns"><button data-go="back" class="primary">Назад</button></div>`;
+  },
+
+  scr_settings() {
+    const st = G.Game.progress.settings;
+    return `<h2>Настройки</h2><div class="settings">
+      <label class="range">Музыка <input type="range" min="0" max="100" value="${Math.round(st.music * 100)}" data-set="music"></label>
+      <label class="range">Звуки <input type="range" min="0" max="100" value="${Math.round(st.sfx * 100)}" data-set="sfx"></label>
+      <label class="check"><input type="checkbox" data-set="particles" ${st.particles ? 'checked' : ''}> Частицы и эффекты</label>
+      <label class="check"><input type="checkbox" data-set="showFps" ${st.showFps ? 'checked' : ''}> Показывать FPS</label>
+      <label class="range">Скорость в начале миссии
+        <select data-set="speed"><option value="1" ${st.speed === 1 ? 'selected' : ''}>1×</option>
+        <option value="2" ${st.speed === 2 ? 'selected' : ''}>2×</option></select></label>
+      </div>
+      <div class="menu-btns"><button data-go="back" class="primary">Готово</button>
+      <button data-go="reset" class="danger">Сбросить весь прогресс</button></div>`;
+  },
+
+  scr_end() {
+    const s = this.s, o = s.over, L = G.World.level(s), st = s.stats;
+    const total = st.byDrones + st.manual;
+    const share = total > 0 ? Math.round(st.byDrones / total * 100) : 0;
+    const title = o.endless ? 'Вахта окончена' : (o.win ? 'Станция выросла!' : 'Станция потеряна');
+    const hasNext = o.win && s.levelIndex + 1 < G.DATA.LEVELS.length;
+    return `<h2>${title}</h2>
+      ${o.win ? `<p class="stars big" aria-label="${o.stars} из 3">${'★'.repeat(o.stars)}${'☆'.repeat(3 - o.stars)}</p>` : ''}
+      <dl class="stats">
+        <dt>Время</dt><dd>${this.time(o.time)}</dd>
+        <dt>Больше всего колонистов</dt><dd>${st.peak}</dd>
+        <dt>Перевезли дроны</dt><dd>${Math.floor(st.byDrones)}</dd>
+        <dt>Перенесено вручную</dt><dd>${Math.floor(st.manual)}</dd>
+        <dt>Метеоритных дождей</dt><dd>${st.meteors}</dd>
+        <dt>Построено модулей</dt><dd>${st.built}</dd>
+      </dl>
+      <p class="moral">${total > 0 ? `Дроны сделали ${share}% всей перевозки.` : ''} ${o.win ? '' : 'Совет: проверьте программу дронов и резерв воды.'}</p>
+      <div class="menu-btns">
+        ${hasNext ? `<button data-go="start" data-i="${s.levelIndex + 1}" class="primary">Следующая миссия</button>` : ''}
+        <button data-go="start" data-i="${s.levelIndex}" class="${hasNext ? '' : 'primary'}">${o.win ? 'Сыграть ещё раз' : 'Попробовать снова'}</button>
+        <button data-go="tomenu">В меню</button></div>`;
+  },
+
+  onOverlayClick(e) {
+    const b = e.target.closest('[data-go]');
+    if (!b || b.disabled) return;
+    G.Audio.play('click');
+    const go = b.dataset.go;
+    switch (go) {
+      case 'menu': this.show('menu'); break;
+      case 'levels': this.show('levels'); break;
+      case 'help': this.show('help'); break;
+      case 'settings': this.show('settings'); break;
+      case 'back': this.show(this.backTo || 'menu'); break;
+      case 'resume': this.hideOverlay(); break;
+      case 'continue': G.Game.continueRun(); break;
+      case 'start': G.Game.start(+b.dataset.i); break;
+      case 'restart': G.Game.start(this.s.levelIndex); break;
+      case 'tomenu': G.Game.toMenu(); break;
+      case 'reset':
+        if (b.dataset.sure) { G.Game.resetProgress(); this.show('settings'); }
+        else { b.dataset.sure = '1'; b.textContent = 'Нажмите ещё раз для сброса'; }
+        break;
+    }
+  },
+
+  onSetting(e) {
+    const el = e.target, k = el.dataset.set;
+    if (!k) return;
+    const st = G.Game.progress.settings;
+    if (k === 'music' || k === 'sfx') { st[k] = el.value / 100; G.Audio.setVolume(k, st[k]); }
+    else if (k === 'speed') st.speed = +el.value;
+    else st[k] = el.checked;
+    G.Save.saveProgress(G.Game.progress);
+  }
+};
+
+</script>
+  <script>
+'use strict';
+// =====================================================================
+// main.js — управление игрой и главный цикл.
+// Симуляция идёт фиксированными шагами (1/60 с) независимо от FPS:
+// так игра одинаково работает на быстром и медленном ноутбуке.
+// =====================================================================
+
+G.Game = {
+  state: null, paused: true, speed: 1, progress: null,
+  saveT: 0, acc: 0, last: 0, ended: false,
+  fps: { n: 0, t: 0, v: 0 },
+
+  boot() {
+    this.progress = G.Save.loadProgress();
+    G.Audio.vol.music = this.progress.settings.music;
+    G.Audio.vol.sfx = this.progress.settings.sfx;
+    G.Render.init(document.getElementById('cv'));
+    G.UI.init();
+    G.UI.show('menu');
+
+    // свернули вкладку — ставим паузу; закрыли — сохраняемся
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.state && !this.state.over && !G.UI.screen) G.UI.show('pause');
+    });
+    window.addEventListener('beforeunload', () => { if (this.state) G.Save.saveRun(this.state); });
+
+    this.last = performance.now();
+    requestAnimationFrame(t => this.frame(t));
+  },
+
+  begin(s) {
+    this.state = s;
+    this.speed = this.progress.settings.speed || 1;
+    this.acc = 0;
+    this.saveT = 0;
+    this.ended = false;
+    G.UI.onNewState();
+    G.UI.hideOverlay();
+    G.Audio.startMusic();
+  },
+
+  start(i) {
+    this.begin(G.World.newState(i));
+    G.Tutorial.begin(this.state);
+    G.Save.saveRun(this.state);
+  },
+
+  continueRun() {
+    const s = G.Save.loadRun();
+    if (!s) { G.Save.clearRun(); G.UI.toast('Сохранение не найдено'); G.UI.show('menu'); return; }
+    this.begin(s);
+    G.Tutorial.active = false;
+    G.Tutorial.hide();
+  },
+
+  toMenu() {
+    if (this.state && !this.state.over) G.Save.saveRun(this.state);
+    this.state = null;
+    G.Tutorial.active = false;
+    G.Tutorial.hide();
+    G.UI.renderPanel(true);
+    G.UI.show('menu');
+  },
+
+  resetProgress() {
+    const settings = this.progress.settings;
+    this.progress = G.Save.defaults();
+    this.progress.settings = settings;
+    G.Save.saveProgress(this.progress);
+    G.Save.clearRun();
+  },
+
+  frame(now) {
+    const dt = Math.min(0.25, (now - this.last) / 1000);
+    this.last = now;
+    const s = this.state;
+
+    if (s && !this.paused && !s.over) {
+      this.acc += dt * this.speed;
+      const step = G.DATA.STEP;
+      let n = 0;
+      while (this.acc >= step && n < 40) { G.Sim.step(s, step); this.acc -= step; n++; }
+      if (n >= 40) this.acc = 0;          // защита от «спирали смерти» на слабом ПК
+      this.saveT += dt;
+      if (this.saveT > 15) { this.saveT = 0; G.Save.saveRun(s); }
+    }
+
+    if (s) {
+      G.UI.consume(s);
+      G.Tutorial.update(s);
+      if (s.over && !this.ended) { this.ended = true; this.finish(s); }
+    }
+
+    G.Render.draw(s, this.paused ? 0 : dt, G.UI);
+    G.UI.update(dt);
+
+    this.fps.n++;
+    this.fps.t += dt;
+    if (this.fps.t >= 0.5) { this.fps.v = Math.round(this.fps.n / this.fps.t); this.fps.n = 0; this.fps.t = 0; }
+    requestAnimationFrame(t => this.frame(t));
+  },
+
+  finish(s) {
+    const p = this.progress, i = s.levelIndex, o = s.over;
+    if (o.win) {
+      p.stars[i] = Math.max(p.stars[i] || 0, o.stars);
+      if (!p.best[i] || o.time < p.best[i]) p.best[i] = o.time;
+      p.unlocked = Math.max(p.unlocked, Math.min(G.DATA.LEVELS.length, i + 2));
+    }
+    if (o.endless && (!p.best[i] || o.time > p.best[i])) p.best[i] = o.time;
+    G.Save.saveProgress(p);
+    G.Save.clearRun();
+    G.Tutorial.active = false;
+    G.Tutorial.hide();
+    G.Audio.play(o.win ? 'win' : 'lose');
+    setTimeout(() => { if (this.state === s) G.UI.show('end'); }, 1000);
+  }
+};
+
+window.addEventListener('DOMContentLoaded', () => G.Game.boot());
+
+</script>
+</body>
+</html>
